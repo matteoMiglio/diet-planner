@@ -1,3 +1,4 @@
+import { isPushServiceUrl } from '@diet/shared';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import webpush from 'web-push';
 import type { Db } from '../db/client.js';
@@ -48,6 +49,12 @@ export function createPusher(config: VapidConfig): Pusher {
       let failed = 0;
       await Promise.all(
         subs.map(async (sub) => {
+          // Defence in depth: never POST to a non-push-service URL, even if one got stored.
+          if (!isPushServiceUrl(sub.endpoint)) {
+            await db.delete(pushSubscription).where(eq(pushSubscription.id, sub.id));
+            failed++;
+            return;
+          }
           try {
             await webpush.sendNotification(
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },

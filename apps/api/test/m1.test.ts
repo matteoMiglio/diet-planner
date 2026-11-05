@@ -294,7 +294,10 @@ describe('settings and push', () => {
   });
 
   it('stores push subscriptions idempotently', async () => {
-    const sub = { endpoint: 'https://push.example.com/abc', keys: { p256dh: 'k', auth: 'a' } };
+    const sub = {
+      endpoint: 'https://web.push.apple.com/QGuQyavXutnMb',
+      keys: { p256dh: 'k', auth: 'a' },
+    };
     await app.request('/api/push/subscriptions', json(sub));
     await app.request('/api/push/subscriptions', json(sub));
     expect(await db.select().from(pushSubscription)).toHaveLength(1);
@@ -451,5 +454,29 @@ describe('review fixes', () => {
 
     // A later success on another day is recorded as delivered.
     expect(await runReminders(db, fakePusher, at('2026-02-16T07:31'))).toEqual(['weigh_in']);
+  });
+});
+
+describe('push endpoint allowlist', () => {
+  it('accepts browser push services and rejects anything else', async () => {
+    const subscribe = (endpoint: string) =>
+      app.request('/api/push/subscriptions', json({ endpoint, keys: { p256dh: 'k', auth: 'a' } }));
+    for (const ok of [
+      'https://web.push.apple.com/abc',
+      'https://fcm.googleapis.com/fcm/send/abc',
+      'https://updates.push.services.mozilla.com/wpush/v2/abc',
+    ]) {
+      expect((await subscribe(ok)).status).toBe(204);
+    }
+    for (const bad of [
+      'http://web.push.apple.com/abc',
+      'https://169.254.169.254/latest/meta-data',
+      'https://localhost:3000/api/measurements',
+      'https://web.push.apple.com.evil.example/abc',
+      'https://fcm.googleapis.com:8443/abc',
+      'https://user@fcm.googleapis.com/abc',
+    ]) {
+      expect((await subscribe(bad)).status).toBe(422);
+    }
   });
 });
