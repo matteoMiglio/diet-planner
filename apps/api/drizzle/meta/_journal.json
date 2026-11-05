@@ -15,6 +15,13 @@
       "when": 1793905145059,
       "tag": "0001_concerned_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793907283621,
+      "tag": "0002_swift_katie_power",
+      "breakpoints": true
     }
   ]
 }

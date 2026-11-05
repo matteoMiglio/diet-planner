@@ -27,6 +27,7 @@ import { isValidTimeZone } from '../lib/time.js';
 import { currentCheckin, listGirths, saveCheckin } from '../services/checkins.js';
 import { addWeight, importTanitaRows, listMeasurements } from '../services/measurements.js';
 import type { Pusher } from '../services/push.js';
+import { createPlanRoutes } from './plan.js';
 
 export interface ApiDeps {
   db: Db;
@@ -289,6 +290,8 @@ export function createApi({ db, ingestToken, pusher = null, now = () => new Date
     });
     return c.json(result);
   });
+
+  api.route('/', createPlanRoutes({ db, now }));
 
   // ---------- Ingest (iOS Shortcuts, bearer token) ----------
 

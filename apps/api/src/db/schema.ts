@@ -12,6 +12,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -187,4 +188,186 @@ export const notificationLog = pgTable(
     delivered: boolean().notNull().default(false),
   },
   (t) => [unique('notification_log_once_per_day').on(t.userId, t.kind, t.localDate)],
+);
+
+// ---------- M2: phases, targets, reviews ----------
+
+export const phase = pgTable(
+  'phase',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    type: text().notNull(),
+    startedOn: date().notNull(),
+    endedOn: date(),
+    /** Only one phase is active at a time (partial unique index below). */
+    status: text().notNull().default('active'),
+    rateBandLowKgPerWeek: num(4, 2),
+    rateBandHighKgPerWeek: num(4, 2),
+    targetWeightKg: num(5, 2),
+    holdBandKg: num(3, 2).notNull().default(0.5),
+    surplusPct: num(4, 3),
+    deficitRatePctPerWeek: num(5, 4),
+    reviewEveryDays: integer().notNull().default(21),
+    intent: text(),
+    postMortem: text(),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      'phase_type_check',
+      sql`${t.type} in ('cut', 'maintenance', 'surplus', 'maingain', 'recomp')`,
+    ),
+    check('phase_status_check', sql`${t.status} in ('active', 'closed')`),
+    check('phase_review_days_check', sql`${t.reviewEveryDays} between 7 and 84`),
+    uniqueIndex('phase_one_active')
+      .on(t.userId)
+      .where(sql`${t.status} = 'active'`),
+  ],
+);
+
+/** Append-only history of the maintenance estimate. Information and guardrail only. */
+export const maintenanceEstimate = pgTable('maintenance_estimate', {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: ownerId(),
+  asOf: date().notNull(),
+  kcal: integer().notNull(),
+  method: text().notNull(),
+  inputs: jsonb(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Versioned calorie and macro targets of a phase. The latest effective version applies. */
+export const targets = pgTable(
+  'targets',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    phaseId: uuid()
+      .notNull()
+      .references(() => phase.id, { onDelete: 'cascade' }),
+    version: integer().notNull(),
+    effectiveFrom: date().notNull(),
+    trainingKcal: integer().notNull(),
+    trainingProteinG: integer().notNull(),
+    trainingFatG: integer().notNull(),
+    trainingCarbsG: integer().notNull(),
+    trainingFibreG: integer().notNull(),
+    restKcal: integer().notNull(),
+    restProteinG: integer().notNull(),
+    restFatG: integer().notNull(),
+    restCarbsG: integer().notNull(),
+    restFibreG: integer().notNull(),
+    /** Daily carb change vs the previous version; ≥ 40 g starts the water grace period. */
+    carbChangeG: integer().notNull().default(0),
+    reasoning: text(),
+    createdBy: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('targets_phase_version_unique').on(t.phaseId, t.version),
+    check('targets_created_by_check', sql`${t.createdBy} in ('engine', 'manual')`),
+  ],
+);
+
+export const proposal = pgTable(
+  'proposal',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    kind: text().notNull(),
+    phaseId: uuid().references(() => phase.id, { onDelete: 'cascade' }),
+    payload: jsonb().notNull(),
+    reasoning: text().notNull(),
+    status: text().notNull().default('pending'),
+    decidedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('proposal_kind_check', sql`${t.kind} in ('targets_change', 'diet_break')`),
+    check(
+      'proposal_status_check',
+      sql`${t.status} in ('pending', 'approved', 'rejected', 'expired')`,
+    ),
+    uniqueIndex('proposal_one_pending_per_kind')
+      .on(t.userId, t.kind)
+      .where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+/** Every review run, including holds, so the history explains itself. */
+export const review = pgTable('review', {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: ownerId(),
+  phaseId: uuid()
+    .notNull()
+    .references(() => phase.id, { onDelete: 'cascade' }),
+  ranOn: date().notNull(),
+  outcome: text().notNull(),
+  explanation: text().notNull(),
+  inputs: jsonb().notNull(),
+  proposalId: uuid().references(() => proposal.id, { onDelete: 'set null' }),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------- M2: foods and the meal plan ----------
+
+export const food = pgTable(
+  'food',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    source: text().notNull().default('custom'),
+    sourceRef: text(),
+    barcode: text(),
+    name: text().notNull(),
+    brand: text(),
+    /** Per 100 g (or 100 ml for liquids). */
+    kcal: num(6, 1).notNull(),
+    proteinG: num(5, 1).notNull(),
+    carbsG: num(5, 1).notNull(),
+    fatG: num(5, 1).notNull(),
+    fibreG: num(5, 1),
+    sugarG: num(5, 1),
+    satFatG: num(5, 1),
+    saltG: num(5, 2),
+    basis: text().notNull().default('as_sold'),
+    /** Named portions → grams, e.g. {"cup": 150, "pcs": 1.33}. */
+    units: jsonb().$type<Record<string, number>>().notNull().default({}),
+    notes: text(),
+    archived: boolean().notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [
+    check('food_source_check', sql`${t.source} in ('custom', 'off', 'opennutrition')`),
+    check('food_basis_check', sql`${t.basis} in ('raw', 'dry', 'cooked', 'drained', 'as_sold')`),
+    check(
+      'food_macros_check',
+      sql`${t.kcal} >= 0 and ${t.proteinG} >= 0 and ${t.carbsG} >= 0 and ${t.fatG} >= 0`,
+    ),
+    index('food_user_name_idx').on(t.userId, t.name),
+  ],
+);
+
+export const mealPlan = pgTable(
+  'meal_plan',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    phaseId: uuid().references(() => phase.id, { onDelete: 'set null' }),
+    name: text().notNull(),
+    status: text().notNull().default('draft'),
+    createdBy: text().notNull().default('manual'),
+    /** The whole week as a document; see PlanDocument in packages/shared. */
+    document: jsonb().notNull(),
+    activatedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    check('meal_plan_status_check', sql`${t.status} in ('draft', 'active', 'archived')`),
+    check('meal_plan_created_by_check', sql`${t.createdBy} in ('manual', 'ai')`),
+    uniqueIndex('meal_plan_one_active')
+      .on(t.userId)
+      .where(sql`${t.status} = 'active'`),
+  ],
 );

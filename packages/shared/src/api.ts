@@ -3,6 +3,7 @@
  * Dates travel as ISO strings (instants) or `YYYY-MM-DD` (local calendar dates).
  */
 import { z } from 'zod';
+import type { PlanDay, PlanDocument } from './plan.js';
 
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM');
@@ -196,3 +197,157 @@ export const PushSubscribeRequest = z.object({
 export const PushUnsubscribeRequest = z.object({ endpoint: z.url().max(2048) });
 
 export { localDate };
+
+// ---------- M2: phases, targets, reviews ----------
+
+export const PhaseTypeSchema = z.enum(['cut', 'maintenance', 'surplus', 'maingain', 'recomp']);
+export type PhaseTypeValue = z.infer<typeof PhaseTypeSchema>;
+
+const DayTargetsSchema = z.object({
+  kcal: z.number().int().min(800).max(6000),
+  proteinG: z.number().int().min(0).max(500),
+  fatG: z.number().int().min(0).max(400),
+  carbsG: z.number().int().min(0).max(1000),
+  fibreG: z.number().int().min(0).max(150),
+});
+export const TargetsSchema = z.object({ training: DayTargetsSchema, rest: DayTargetsSchema });
+
+export interface DayTargetsDto {
+  kcal: number;
+  proteinG: number;
+  fatG: number;
+  carbsG: number;
+  fibreG: number;
+}
+
+export interface TargetsDto {
+  id: string;
+  version: number;
+  effectiveFrom: string;
+  training: DayTargetsDto;
+  rest: DayTargetsDto;
+  carbChangeG: number;
+  reasoning: string | null;
+  createdBy: 'engine' | 'manual';
+}
+
+export interface PhaseDto {
+  id: string;
+  type: PhaseTypeValue;
+  startedOn: string;
+  endedOn: string | null;
+  status: 'active' | 'closed';
+  rateBandKgPerWeek: [number, number] | null;
+  targetWeightKg: number | null;
+  holdBandKg: number;
+  surplusPct: number | null;
+  deficitRatePctPerWeek: number | null;
+  reviewEveryDays: number;
+  intent: string | null;
+}
+
+export const CreatePhaseRequest = z.object({
+  type: PhaseTypeSchema,
+  startedOn: localDate,
+  maintenanceKcal: z.number().int().min(1000).max(6000),
+  /** Defaults to the trend's current weight. */
+  bodyweightKg: WeightKg.optional(),
+  surplusPct: z.number().min(0).max(0.1).optional(),
+  deficitRatePctPerWeek: z.number().min(0).max(0.015).optional(),
+  rateBandKgPerWeek: z.tuple([z.number(), z.number()]).nullable().optional(),
+  targetWeightKg: WeightKg.nullable().optional(),
+  reviewEveryDays: z.number().int().min(7).max(84).optional(),
+  intent: z.string().max(2000).nullable().optional(),
+  /** Overrides the engine's targets. */
+  targets: TargetsSchema.optional(),
+});
+export type CreatePhaseRequest = z.infer<typeof CreatePhaseRequest>;
+
+export const UpdateTargetsRequest = z.object({
+  targets: TargetsSchema,
+  reasoning: z.string().min(1).max(2000),
+  effectiveFrom: localDate.optional(),
+});
+
+export interface ProposalDto {
+  id: string;
+  kind: 'targets_change' | 'diet_break';
+  status: 'pending' | 'approved' | 'rejected' | 'expired';
+  reasoning: string;
+  createdAt: string;
+  /** For targets_change: the proposed targets and the change per day type. */
+  targets: { training: DayTargetsDto; rest: DayTargetsDto } | null;
+  deltaKcal: { training: number; rest: number } | null;
+}
+
+export interface ReviewDto {
+  id: string;
+  ranOn: string;
+  outcome: 'hold' | 'change' | 'propose_diet_break';
+  explanation: string;
+  proposalId: string | null;
+}
+
+export interface PlanOverviewDto {
+  phase: PhaseDto | null;
+  targets: TargetsDto | null;
+  maintenance: { kcal: number; asOf: string; method: string } | null;
+  nextReviewOn: string | null;
+  lastReview: ReviewDto | null;
+  pendingProposal: ProposalDto | null;
+  activePlan: MealPlanDto | null;
+  trainingWeekdays: number[];
+}
+
+// ---------- M2: foods and plans ----------
+
+const per100 = z.number().min(0).max(100);
+export const FoodInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  brand: z.string().trim().max(120).nullable().optional(),
+  kcal: z.number().min(0).max(1000),
+  proteinG: per100,
+  carbsG: per100,
+  fatG: per100,
+  fibreG: per100.nullable().optional(),
+  basis: z.enum(['raw', 'dry', 'cooked', 'drained', 'as_sold']).optional(),
+  units: z.record(z.string().trim().min(1).max(30), z.number().positive().max(3000)).optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  archived: z.boolean().optional(),
+});
+export type FoodInput = z.infer<typeof FoodInput>;
+export const FoodPatch = FoodInput.partial();
+export type FoodPatch = z.infer<typeof FoodPatch>;
+
+export interface FoodDto {
+  id: string;
+  name: string;
+  brand: string | null;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fibreG: number | null;
+  basis: 'raw' | 'dry' | 'cooked' | 'drained' | 'as_sold';
+  units: Record<string, number>;
+  notes: string | null;
+  archived: boolean;
+}
+
+export interface MealPlanDto {
+  id: string;
+  name: string;
+  status: 'draft' | 'active' | 'archived';
+  phaseId: string | null;
+  document: PlanDocument;
+  activatedAt: string | null;
+  updatedAt: string;
+}
+
+export interface TodayDto {
+  date: string;
+  weekday: number;
+  dayType: 'training' | 'rest';
+  targets: DayTargetsDto | null;
+  plan: { id: string; name: string; day: PlanDay } | null;
+}
