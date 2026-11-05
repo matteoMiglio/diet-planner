@@ -156,8 +156,39 @@ export interface SettingsDto {
 
 // ---------- Push ----------
 
+/**
+ * Push endpoints the server may POST to: the browsers' push services only. Anything else
+ * would let a forged subscription make the server call arbitrary (internal) URLs.
+ */
+const PUSH_SERVICE_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /^([a-z0-9-]+\.)*push\.apple\.com$/,
+  /^updates\.push\.services\.mozilla\.com$/,
+  /^([a-z0-9-]+\.)*notify\.windows\.com$/,
+];
+
+export function isPushServiceUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.port === '' &&
+      url.username === '' &&
+      url.password === '' &&
+      PUSH_SERVICE_HOSTS.some((re) => re.test(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+const pushEndpoint = z
+  .url()
+  .max(2048)
+  .refine(isPushServiceUrl, 'Not a known browser push service URL');
+
 export const PushSubscribeRequest = z.object({
-  endpoint: z.url().max(2048),
+  endpoint: pushEndpoint,
   keys: z.object({ p256dh: z.string().min(1).max(512), auth: z.string().min(1).max(512) }),
   deviceLabel: z.string().max(100).optional(),
 });
