@@ -6,6 +6,7 @@ import { bodyMeasurement, checkin, notificationLog, pushSubscription } from '../
 import type { Profile } from '../lib/owner.js';
 import { loadOwner } from '../lib/owner.js';
 import { isoWeekStart, localParts, localToInstant } from '../lib/time.js';
+import { latestReviewOn, reviewDue, runReview } from './phases.js';
 
 export interface VapidConfig {
   publicKey: string;
@@ -87,7 +88,7 @@ export function createPusher(config: VapidConfig): Pusher {
   };
 }
 
-export type ReminderKind = 'weigh_in' | 'checkin';
+export type ReminderKind = 'weigh_in' | 'checkin' | 'review';
 
 /** How long after its scheduled time a reminder is still worth sending (e.g. after a restart). */
 const SEND_WINDOW_MIN = 3 * 60;
@@ -134,7 +135,7 @@ export async function dueReminders(db: Db, owner: Profile, now: Date): Promise<R
   return due;
 }
 
-const MESSAGES: Record<ReminderKind, PushMessage> = {
+const MESSAGES: Record<Exclude<ReminderKind, 'review'>, PushMessage> = {
   weigh_in: {
     title: 'Weigh-in',
     body: 'Step on the Tanita, then share the CSV — or tap to log just the weight.',
@@ -149,59 +150,138 @@ const MESSAGES: Record<ReminderKind, PushMessage> = {
   },
 };
 
-/** After a failed delivery, wait this long before trying again; give up after MAX_ATTEMPTS. */
+/** After a failed attempt, wait this long before trying again; give up after MAX_ATTEMPTS. */
 const RETRY_AFTER_MIN = 15;
 const MAX_ATTEMPTS = 4;
 
 /**
- * Sends due reminders at most once per kind per local day. The log row is claimed before
- * sending, so a restart or a second instance can't double-send; a delivery that reached no
- * device releases the day for a retry after a pause instead of losing the reminder.
+ * Claims today's slot for a job (a reminder, a review run, a review notification). Returns
+ * the log row id when this caller should do the job now: the first time today, or again
+ * after a failed attempt once the retry pause has passed. A restart or a second instance
+ * can't do the same job twice.
  */
-export async function runReminders(db: Db, pusher: Pusher, now: Date): Promise<ReminderKind[]> {
-  const owner = await loadOwner(db);
-  const sent: ReminderKind[] = [];
-  for (const kind of await dueReminders(db, owner, now)) {
-    const localDate = localParts(now, owner.timezone).date;
-    const retryBefore = new Date(now.getTime() - RETRY_AFTER_MIN * 60_000);
-    const [claim] = await db
-      .insert(notificationLog)
-      .values({ userId: owner.userId, kind, localDate, sentAt: now })
-      .onConflictDoUpdate({
-        target: [notificationLog.userId, notificationLog.kind, notificationLog.localDate],
-        set: { attempts: sql`${notificationLog.attempts} + 1`, sentAt: now },
-        setWhere: sql`${notificationLog.delivered} = false
-          and ${notificationLog.sentAt} < ${retryBefore.toISOString()}::timestamptz
-          and ${notificationLog.attempts} < ${MAX_ATTEMPTS}`,
-      })
-      .returning({ id: notificationLog.id });
-    if (!claim) continue;
+async function claim(db: Db, userId: string, kind: string, localDate: string, now: Date) {
+  const retryBefore = new Date(now.getTime() - RETRY_AFTER_MIN * 60_000);
+  const [row] = await db
+    .insert(notificationLog)
+    .values({ userId, kind, localDate, sentAt: now })
+    .onConflictDoUpdate({
+      target: [notificationLog.userId, notificationLog.kind, notificationLog.localDate],
+      set: { attempts: sql`${notificationLog.attempts} + 1`, sentAt: now },
+      setWhere: sql`${notificationLog.delivered} = false
+        and ${notificationLog.sentAt} < ${retryBefore.toISOString()}::timestamptz
+        and ${notificationLog.attempts} < ${MAX_ATTEMPTS}`,
+    })
+    .returning({ id: notificationLog.id });
+  return row?.id ?? null;
+}
 
-    const result = await pusher.send(db, owner.userId, MESSAGES[kind]);
-    // No devices at all is not a failure worth retrying.
-    const delivered = result.sent > 0 || result.failed === 0;
-    if (delivered) {
-      await db
-        .update(notificationLog)
-        .set({ delivered: true })
-        .where(eq(notificationLog.id, claim.id));
-      sent.push(kind);
+async function markDone(db: Db, id: string) {
+  await db.update(notificationLog).set({ delivered: true }).where(eq(notificationLog.id, id));
+}
+
+/** Sends a push; true when it reached a device, or there was no device to reach. */
+async function deliver(db: Db, pusher: Pusher, userId: string, message: PushMessage) {
+  const result = await pusher.send(db, userId, message);
+  return result.sent > 0 || result.failed === 0;
+}
+
+/**
+ * Sends due reminders (at most once per kind per local day, retried after a failed
+ * delivery) and runs a due review. Without a pusher, only reviews run.
+ */
+export async function runReminders(
+  db: Db,
+  pusher: Pusher | null,
+  now: Date,
+): Promise<ReminderKind[]> {
+  const owner = await loadOwner(db);
+  const localDate = localParts(now, owner.timezone).date;
+  const sent: ReminderKind[] = [];
+  if (pusher) {
+    for (const kind of await dueReminders(db, owner, now)) {
+      const id = await claim(db, owner.userId, kind, localDate, now);
+      if (!id) continue;
+      if (
+        await deliver(db, pusher, owner.userId, MESSAGES[kind as Exclude<ReminderKind, 'review'>])
+      ) {
+        await markDone(db, id);
+        sent.push(kind);
+      }
     }
   }
+  if (await runScheduledReview(db, pusher, owner, localDate, now)) sent.push('review');
   return sent;
 }
 
-/** Checks reminders every minute. Returns a stop function. */
-export function startReminderLoop(db: Db, pusher: Pusher, intervalMs = 60_000): () => void {
+/** Scheduled reviews run at midday, after the morning weigh-in has had time to arrive. */
+const REVIEW_TIME_MIN = 12 * 60;
+
+/**
+ * Runs a due review at or after midday on its due date, then pushes its outcome. Running and
+ * notifying are claimed separately: a failed run is retried later in the day, and a failed
+ * notification is resent from the stored result even though the review itself won't run again.
+ */
+async function runScheduledReview(
+  db: Db,
+  pusher: Pusher | null,
+  owner: Profile,
+  localDate: string,
+  now: Date,
+): Promise<boolean> {
+  if (localParts(now, owner.timezone).minutes < REVIEW_TIME_MIN) return false;
+
+  let ran = false;
+  if (await reviewDue(db, owner, now)) {
+    const id = await claim(db, owner.userId, 'review_run', localDate, now);
+    if (id) {
+      await runReview(db, owner, now); // throws on failure: the claim stays open for a retry
+      await markDone(db, id);
+      ran = true;
+    }
+  }
+
+  // Notify only about today's scheduled run, not a review run by hand from the app.
+  const [scheduled] = await db
+    .select({ id: notificationLog.id })
+    .from(notificationLog)
+    .where(
+      and(
+        eq(notificationLog.userId, owner.userId),
+        eq(notificationLog.kind, 'review_run'),
+        eq(notificationLog.localDate, localDate),
+        eq(notificationLog.delivered, true),
+      ),
+    );
+  if (scheduled && pusher && owner.remindersEnabled) {
+    const latest = await latestReviewOn(db, owner.userId, localDate);
+    if (latest) {
+      const id = await claim(db, owner.userId, 'review', localDate, now);
+      if (id) {
+        const ok = await deliver(db, pusher, owner.userId, {
+          title: latest.outcome === 'hold' ? 'Review: no change' : 'Review: proposal ready',
+          body: latest.explanation,
+          url: '/plan',
+          tag: 'review',
+        });
+        if (ok) await markDone(db, id);
+      }
+    }
+  }
+  return ran;
+}
+
+/** Checks reminders and reviews every minute. Returns a stop function. */
+export function startReminderLoop(db: Db, pusher: Pusher | null, intervalMs = 60_000): () => void {
   let running = false;
   const tick = async () => {
     if (running) return;
     running = true;
     try {
-      const sent = await runReminders(db, pusher, new Date());
-      if (sent.length > 0) console.log(`reminders sent: ${sent.join(', ')}`);
+      const done = await runReminders(db, pusher, new Date());
+      if (done.length > 0) console.log(`scheduled: ${done.join(', ')}`);
     } catch (err) {
-      console.error('reminder check failed', err);
+      console.error('reminder/review check failed', err);
     } finally {
       running = false;
     }

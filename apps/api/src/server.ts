@@ -22,7 +22,8 @@ const pusher =
     : null;
 if (!pusher) console.warn('VAPID keys not set: push reminders are off');
 if (!env.INGEST_TOKEN) console.warn('INGEST_TOKEN not set: the Shortcut endpoints are off');
-const stopReminders = pusher ? startReminderLoop(db, pusher) : () => {};
+// Reviews are scheduled even without push; reminders need it.
+const stopReminders = startReminderLoop(db, pusher);
 
 const app = createApp({
   db,

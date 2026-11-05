@@ -182,7 +182,9 @@ No segmental fields: the RD-953 export has them, but they're empty (`-`, or `0.0
 
 **`targets`**: versioned. `phase_id`, `version`, `effective_from`, then per day type (`training`, `rest`): `kcal`, `protein_g`, `fat_g`, `carbs_g`, `fibre_g`. Plus `carb_change_g` (vs the previous version; drives the water grace period), `reasoning`, `created_by` (engine · manual).
 
-**`meal_plan`**: `phase_id`, `targets_id`, `status` (draft · proposed · active · archived · rejected), `created_by` (ai · manual), `ai_run_id`, `summary`, `activated_at`.
+**`meal_plan`**: `phase_id`, `name`, `status` (draft · active · archived), `created_by` (ai · manual), `document`, `activated_at`.
+
+> **Changed in M2:** the week is stored as one validated JSON document (`PlanDocument` in `packages/shared/src/plan.ts`) instead of the `plan_day` / `plan_meal` / `plan_option` / `plan_item` tables below. One user edits a whole week at a time, so a document is simpler. Each item keeps a macro snapshot, so history still never changes. The table descriptions below now describe the document's shape.
 
 **`plan_day`**: `meal_plan_id`, `weekday`, `day_type`, plus computed totals.
 
@@ -285,20 +287,24 @@ Otherwise the result is "hold", with the specific reason and what would unblock 
 
 **Change semantics:** "+150 kcal" means **+150 kcal on each affected day**. A "training days only" step is about +64 kcal/day on the weekly average, and the UI shows both figures. All changes are carbs only.
 
-| Phase                  | Condition (uses the slope's CI80)                                                                         | Action                                                                |
-| ---------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| surplus                | CI80 entirely above 0.25 kg/week, **or** waist up >1 cm over the window                                   | −100 kcal carbs, **rest days first**                                  |
-| surplus                | CI80 entirely below the band's lower edge **and** `training_progressed = yes`                             | +150 kcal carbs (training days only if within 150 of the guardrail)   |
-| surplus                | below the band but `training_progressed = no`                                                             | hold: "fix the training stimulus first; more food would only add fat" |
-| surplus                | low recovery (sleep/energy ≤2) for 2 check-ins                                                            | no calorie change; show the sleep advice                              |
-| cut                    | CI80 entirely below 0.5% BW/week of loss (too slow, flat included)                                        | −100 kcal carbs on rest days (partial-week step)                      |
-| cut                    | CI80 entirely above 1% BW/week                                                                            | +150 kcal carbs on training days                                      |
-| cut                    | low recovery for 2 check-ins                                                                              | +100 kcal carbs on training days                                      |
-| cut                    | 12+ weeks in the phase                                                                                    | propose a 2-week diet break at maintenance (a proposal only)          |
-| maintenance / maingain | trend projects outside `target_weight ± hold_band` and the slope over the last 14 days is >0.5 kg/week up | −100 kcal carbs                                                       |
-| maintenance / maingain | same, but >0.3 kg/week down                                                                               | +100 kcal carbs on training days                                      |
-| maintenance / maingain | low recovery for 2 check-ins at stable weight                                                             | +100 kcal carbs on training days                                      |
-| any                    | otherwise                                                                                                 | hold, "on target"                                                     |
+| Phase                  | Condition (uses the slope's CI80)                                                                                       | Action                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| surplus                | CI80 entirely above 0.25 kg/week, **or** waist up >1 cm over the window                                                 | −100 kcal carbs, **rest days first**                                  |
+| surplus                | best estimate below the band's lower edge, CI80 clear of the band's top, **and** `training_progressed = yes` (see note) | +150 kcal carbs (training days only if within 150 of the guardrail)   |
+| surplus                | below the band but `training_progressed = no`                                                                           | hold: "fix the training stimulus first; more food would only add fat" |
+| surplus                | low recovery (sleep/energy ≤2) for 2 check-ins                                                                          | no calorie change; show the sleep advice                              |
+| cut                    | best estimate losing less than 0.5% BW/week, CI80 clear of 1% (too slow, flat included)                                 | −100 kcal carbs on rest days (partial-week step)                      |
+| cut                    | CI80 entirely above 1% BW/week                                                                                          | +150 kcal carbs on training days                                      |
+| cut                    | low recovery for 2 check-ins                                                                                            | +100 kcal carbs on training days                                      |
+| cut                    | 12+ weeks in the phase                                                                                                  | propose a 2-week diet break at maintenance (a proposal only)          |
+| maintenance / maingain | trend projects outside `target_weight ± hold_band` and the slope over the last 14 days is >0.5 kg/week up               | −100 kcal carbs                                                       |
+| maintenance / maingain | same, but >0.3 kg/week down                                                                                             | +100 kcal carbs on training days                                      |
+| maintenance / maingain | low recovery for 2 check-ins at stable weight                                                                           | +100 kcal carbs on training days                                      |
+| any                    | otherwise                                                                                                               | hold, "on target"                                                     |
+
+> **Changed in M2:** the "too slow" rows originally required the whole CI80 to sit below the band's floor. At two weigh-ins a week the CI80 is about ±0.13 kg/week, so a perfectly flat weight never qualified. They now use the best estimate, guarded by the range staying clear of the opposite limit. "Too fast" keeps the strict rule. Undershooting a surplus is the costlier mistake, so this asymmetry is deliberate.
+>
+> The maintenance estimate is updated _before_ the decision, so the +10% surplus ceiling reflects what the scale has shown.
 
 The output is a `proposal` (`targets_change`) with the trace. If I approve it, the engine re-checks the current plan against the new targets and offers either "adjust portions" (the solver only, no AI) or "generate a new plan".
 
