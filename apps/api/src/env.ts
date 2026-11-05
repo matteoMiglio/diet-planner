@@ -13,6 +13,10 @@ const Env = z.object({
   /** Web push. All three set enables reminders; generate with `npx web-push generate-vapid-keys`. */
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
+  /** Claude API key for plan generation. Unset disables it. */
+  ANTHROPIC_API_KEY: z.string().min(20).optional(),
+  AI_MODEL: z.string().default('claude-opus-5-5'),
+  AI_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('high'),
   VAPID_SUBJECT: z
     .string()
     .regex(/^(mailto:|https:\/\/)/, 'VAPID_SUBJECT must start with mailto: or https://')

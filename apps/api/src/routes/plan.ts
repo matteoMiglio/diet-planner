@@ -2,6 +2,8 @@ import {
   CreatePhaseRequest,
   FoodInput,
   FoodPatch,
+  GeneratePlanRequest,
+  RuleInput,
   type PlanDocument,
   type TodayDto,
   UpdateTargetsRequest,
@@ -35,6 +37,9 @@ import {
   toPlanDto,
   updateFood,
 } from '../services/plans.js';
+import { createRule, deleteRule, listRules, updateRule } from '../services/rules.js';
+import { getRun, listRuns, startGeneration } from '../services/generate.js';
+import type { PlanModel } from '../ai/model.js';
 
 const uuid = z.uuid();
 function idParam(value: string | undefined, what: string): string {
@@ -53,7 +58,15 @@ const SavePlanRequest = z.object({
   document: z.unknown().optional(),
 });
 
-export function createPlanRoutes({ db, now }: { db: Db; now: () => Date }) {
+export function createPlanRoutes({
+  db,
+  now,
+  planModel,
+}: {
+  db: Db;
+  now: () => Date;
+  planModel: PlanModel | null;
+}) {
   const r = new Hono();
 
   // ---------- Phase, targets, reviews ----------
@@ -120,6 +133,49 @@ export function createPlanRoutes({ db, now }: { db: Db; now: () => Date }) {
     const input = await parseJson(c, FoodPatch);
     return c.json(await updateFood(db, (await loadOwner(db)).userId, id, input));
   });
+
+  // ---------- Rules ----------
+
+  r.get('/rules', async (c) => c.json(await listRules(db, (await loadOwner(db)).userId)));
+
+  r.post('/rules', async (c) => {
+    const input = await parseJson(c, RuleInput);
+    return c.json(await createRule(db, (await loadOwner(db)).userId, input), 201);
+  });
+
+  r.put('/rules/:id', async (c) => {
+    const id = idParam(c.req.param('id'), 'rule');
+    const input = await parseJson(c, RuleInput);
+    return c.json(await updateRule(db, (await loadOwner(db)).userId, id, input));
+  });
+
+  r.delete('/rules/:id', async (c) => {
+    await deleteRule(db, (await loadOwner(db)).userId, idParam(c.req.param('id'), 'rule'));
+    return c.body(null, 204);
+  });
+
+  // ---------- AI plan generation ----------
+
+  r.post('/plans/generate', async (c) => {
+    const input = await parseJson(c, GeneratePlanRequest);
+    const owner = await loadOwner(db);
+    return c.json(
+      await startGeneration(
+        db,
+        planModel,
+        owner,
+        { preferences: input.preferences ?? null },
+        now(),
+      ),
+      202,
+    );
+  });
+
+  r.get('/ai-runs', async (c) => c.json(await listRuns(db, (await loadOwner(db)).userId)));
+
+  r.get('/ai-runs/:id', async (c) =>
+    c.json(await getRun(db, (await loadOwner(db)).userId, idParam(c.req.param('id'), 'run'))),
+  );
 
   // ---------- Meal plans ----------
 

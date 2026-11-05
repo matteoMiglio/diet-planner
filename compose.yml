@@ -14,6 +14,9 @@ services:
       DATABASE_URL: postgres://diet:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/diet
       TZ_DEFAULT: ${TZ_DEFAULT:-Europe/Rome}
       INGEST_TOKEN: ${INGEST_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+      AI_EFFORT: ${AI_EFFORT:-high}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}

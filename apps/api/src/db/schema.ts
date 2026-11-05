@@ -336,9 +336,27 @@ export const food = pgTable(
     units: jsonb().$type<Record<string, number>>().notNull().default({}),
     notes: text(),
     archived: boolean().notNull().default(false),
+    // Planning pool (spec §5.3): what the AI may use, and how.
+    inPool: boolean().notNull().default(false),
+    role: text().notNull().default('other'),
+    preferredSlots: text()
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    priority: text().notNull().default('medium'),
+    /** PortionRule: {"kind":"flexible","stepG":5} or {"kind":"fixed_unit","unit":"cup"}. */
+    portion: jsonb()
+      .$type<{ kind: 'flexible'; stepG: number } | { kind: 'fixed_unit'; unit: string }>()
+      .notNull()
+      .default({ kind: 'flexible', stepG: 5 }),
     ...timestamps,
   },
   (t) => [
+    check(
+      'food_role_check',
+      sql`${t.role} in ('main_protein', 'main_carb', 'fat', 'veg', 'fruit', 'dairy_protein', 'snack', 'other')`,
+    ),
+    check('food_priority_check', sql`${t.priority} in ('high', 'medium', 'low')`),
     check('food_source_check', sql`${t.source} in ('custom', 'off', 'opennutrition')`),
     check('food_basis_check', sql`${t.basis} in ('raw', 'dry', 'cooked', 'drained', 'as_sold')`),
     check(
@@ -369,5 +387,53 @@ export const mealPlan = pgTable(
     uniqueIndex('meal_plan_one_active')
       .on(t.userId)
       .where(sql`${t.status} = 'active'`),
+  ],
+);
+
+// ---------- M3: rules and AI runs ----------
+
+/** Planning rules (spec §5.4). `spec` is a RuleSpec from packages/shared/src/rules.ts. */
+export const rule = pgTable('rule', {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: ownerId(),
+  kind: text().notNull(),
+  spec: jsonb().notNull(),
+  text: text().notNull(),
+  active: boolean().notNull().default(true),
+  position: integer().notNull().default(0),
+  ...timestamps,
+});
+
+/** Every model call: what was sent, what came back, what the checks said, and the cost. */
+export const aiRun = pgTable(
+  'ai_run',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    kind: text().notNull(),
+    status: text().notNull().default('queued'),
+    model: text().notNull(),
+    promptVersion: text().notNull(),
+    input: jsonb().notNull(),
+    /** Per attempt: raw output, validation errors, usage. */
+    attempts: jsonb().notNull().default([]),
+    result: jsonb(),
+    error: text(),
+    planId: uuid().references(() => mealPlan.id, { onDelete: 'set null' }),
+    inputTokens: integer().notNull().default(0),
+    outputTokens: integer().notNull().default(0),
+    cacheReadTokens: integer().notNull().default(0),
+    costUsd: num(8, 4).notNull().default(0),
+    startedAt: timestamp({ withTimezone: true }),
+    finishedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('ai_run_kind_check', sql`${t.kind} in ('generate_plan')`),
+    check('ai_run_status_check', sql`${t.status} in ('queued', 'running', 'succeeded', 'failed')`),
+    // One generation at a time per user, enforced by the database.
+    uniqueIndex('ai_run_one_active')
+      .on(t.userId)
+      .where(sql`${t.status} in ('queued', 'running')`),
   ],
 );

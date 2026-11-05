@@ -6,6 +6,7 @@ import { PhaseSetupScreen } from './screens/PhaseSetupScreen';
 import { PlanEditorScreen } from './screens/PlanEditorScreen';
 import { PlanScreen } from './screens/PlanScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
+import { RulesScreen } from './screens/RulesScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TodayScreen } from './screens/TodayScreen';
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
       { path: 'plan/phase', element: <PhaseSetupScreen /> },
       { path: 'plan/edit/:id', element: <PlanEditorScreen /> },
       { path: 'foods', element: <FoodsScreen /> },
+      { path: 'rules', element: <RulesScreen /> },
       { path: '*', element: <TodayScreen /> },
     ],
   },

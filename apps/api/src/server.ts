@@ -4,6 +4,8 @@ import { createApp } from './app.js';
 import { createDb } from './db/client.js';
 import { ensureOwner, runMigrations } from './db/migrate.js';
 import { loadEnv } from './env.js';
+import { createClaudeModel } from './ai/model.js';
+import { failInterruptedRuns } from './services/generate.js';
 import { createPusher, startReminderLoop } from './services/push.js';
 
 const env = loadEnv();
@@ -11,6 +13,12 @@ const { db, sql } = createDb(env.DATABASE_URL);
 
 await runMigrations(db);
 await ensureOwner(db, env.TZ_DEFAULT);
+await failInterruptedRuns(db);
+
+const planModel = env.ANTHROPIC_API_KEY
+  ? createClaudeModel({ apiKey: env.ANTHROPIC_API_KEY, model: env.AI_MODEL, effort: env.AI_EFFORT })
+  : null;
+if (!planModel) console.warn('ANTHROPIC_API_KEY not set: plan generation is off');
 
 const pusher =
   env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT
@@ -31,6 +39,7 @@ const app = createApp({
   webDist: env.WEB_DIST ? path.resolve(env.WEB_DIST) : undefined,
   ingestToken: env.INGEST_TOKEN,
   pusher,
+  planModel,
 });
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {

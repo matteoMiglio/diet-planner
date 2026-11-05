@@ -8,11 +8,12 @@ import type {
   TargetsDto,
 } from '@diet/shared';
 import { dayMacros } from '@diet/shared';
-import { Apple, CalendarDays, Check, Pencil, Play, X } from 'lucide-react';
+import { Apple, CalendarDays, Check, ListChecks, Pencil, Play, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, ApiError } from '../api';
 import { EmptyState } from '../components/EmptyState';
+import { GenerateCard } from '../components/GenerateCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button, Card, ErrorNote, SectionTitle } from '../components/ui';
 import { shortDate } from '../format';
@@ -34,9 +35,14 @@ export function PlanScreen() {
     <>
       <div className="flex items-start justify-between">
         <ScreenHeader title="Plan">Phase, targets, reviews and the week.</ScreenHeader>
-        <Link to="/foods" className="mt-1 flex items-center gap-1 text-sm font-medium text-accent">
-          <Apple size={16} aria-hidden /> Foods
-        </Link>
+        <div className="mt-1 flex gap-3">
+          <Link to="/foods" className="flex items-center gap-1 text-sm font-medium text-accent">
+            <Apple size={16} aria-hidden /> Foods
+          </Link>
+          <Link to="/rules" className="flex items-center gap-1 text-sm font-medium text-accent">
+            <ListChecks size={16} aria-hidden /> Rules
+          </Link>
+        </div>
       </div>
       {overview.status === 'loading' && <p className="text-sm text-muted">Loading…</p>}
       {overview.status === 'error' && <ErrorNote>{overview.error.message}</ErrorNote>}
@@ -84,6 +90,8 @@ function Overview({ data, reload }: { data: PlanOverviewDto; reload: () => Promi
       {data.targets && <TargetsCard targets={data.targets} maintenance={data.maintenance} />}
 
       <ReviewCard data={data} onRan={reload} />
+
+      {data.targets && <GenerateCard />}
 
       <WeekCard
         plan={data.activePlan}

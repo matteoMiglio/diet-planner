@@ -17,16 +17,17 @@ cp .env.example .env
 
 Edit `.env`:
 
-| Variable                                      | Value                                                                                                              |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `POSTGRES_PASSWORD`                           | `openssl rand -hex 24` (hex keeps it URL-safe)                                                                     |
-| `RESTIC_REPOSITORY`                           | `s3:https://<namespace>.compat.objectstorage.<region>.oraclecloud.com/<bucket>/diet-planner`                       |
-| `RESTIC_PASSWORD`                             | `openssl rand -base64 32`. **Store it in 1Password too**: without it the off-site backups can't be read.           |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | An OCI **Customer Secret Key** (Profile → Customer secret keys)                                                    |
-| `AWS_DEFAULT_REGION`                          | The OCI region, e.g. `eu-frankfurt-1`                                                                              |
-| `INGEST_TOKEN`                                | `openssl rand -hex 32`. Used by the iOS Shortcuts ([docs/shortcuts.md](shortcuts.md))                              |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`      | `npx web-push generate-vapid-keys`, once. Changing them later means turning notifications on again on each device. |
-| `VAPID_SUBJECT`                               | `mailto:` + your email, or an `https://` URL. Push services use it as a contact.                                   |
+| Variable                                      | Value                                                                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`                           | `openssl rand -hex 24` (hex keeps it URL-safe)                                                                                     |
+| `RESTIC_REPOSITORY`                           | `s3:https://<namespace>.compat.objectstorage.<region>.oraclecloud.com/<bucket>/diet-planner`                                       |
+| `RESTIC_PASSWORD`                             | `openssl rand -base64 32`. **Store it in 1Password too**: without it the off-site backups can't be read.                           |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | An OCI **Customer Secret Key** (Profile → Customer secret keys)                                                                    |
+| `AWS_DEFAULT_REGION`                          | The OCI region, e.g. `eu-frankfurt-1`                                                                                              |
+| `INGEST_TOKEN`                                | `openssl rand -hex 32`. Used by the iOS Shortcuts ([docs/shortcuts.md](shortcuts.md))                                              |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`      | `npx web-push generate-vapid-keys`, once. Changing them later means turning notifications on again on each device.                 |
+| `VAPID_SUBJECT`                               | `mailto:` + your email, or an `https://` URL. Push services use it as a contact.                                                   |
+| `ANTHROPIC_API_KEY`                           | A Claude API key (console.anthropic.com), for generating meal plans. About $0.25–0.60 per plan. Optional: `AI_MODEL`, `AI_EFFORT`. |
 
 The bucket should be private. Your Object Storage namespace is shown under Tenancy details.
 

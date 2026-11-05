@@ -147,6 +147,8 @@ No segmental fields: the RD-953 export has them, but they're empty (`-`, or `0.0
 | `label_source`, `captured_on`                                                                      | for custom foods                                                                                                                        |
 | `version`                                                                                          | Increases on every change to nutrient values. The previous values are copied to `food_version` (append-only), so history never changes. |
 
+> **Changed in M3:** the pool fields live on `food` itself (`in_pool`, `role`, `preferred_slots`, `priority`, `portion`) instead of a separate `pool_entry` table: one user, one pool. `type` and `macro_anchor` were dropped; `role` carries what the planner needs.
+
 **`pool_entry`**: the Food Pool. `food_id`, `type`, `macro_anchor`, `role` (main_protein · main_carb · fat · veg · fruit · dairy_protein · snack · other: **derived from type and anchor when the entry is created, and editable**), `preferred_slots` (text[]), `priority` (high · medium · low), `portion_rule` (flexible · fixed_unit), `planning_unit` (`{unit, step}`), `notes`, `active`.
 
 ### 5.4 Rules
@@ -320,7 +322,24 @@ The output is a `proposal` (`targets_change`) with the trace. If I approve it, t
 - **Structured outputs:** `client.messages.parse()` + `zodOutputFormat(PlanSchema)`. Constraints the schema can't express (e.g. exactly 7 days) are enforced by the validator.
 - **Refusal fallback:** server-side `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`). `stop_reason` is checked before reading content. Both are to be confirmed against the live API docs at build time.
 - **Prompt caching:** the static system prompt is cached. That mainly helps the repair round, since full generations are about a week apart.
-- Streaming with `finalMessage()`, run in the pg-boss worker. The UI polls the job status.
+- Streaming with `finalMessage()`. The UI polls the run status.
+
+> **Changed in M3:**
+>
+> - **No job queue.** Runs execute in the app process: one at a time per user, and runs interrupted by a restart are marked failed. The pg-boss queue would only pay off with several workers.
+> - **Short food codes.** The model refers to foods as `F01`, `F02` and so on, never as ids or names.
+> - **Fixed slots.** A `fixed_slots` rule copies those meals from the active plan; they're not sent for regeneration.
+> - **Drafts, not proposals.** The result is a draft plan, which the editor opens and the person activates. Activation _is_ the approval.
+> - **Measuring quality.** `pnpm --filter @diet/api eval:plan -- --runs N` runs real generations against a generic fixture and reports pass rate, repair rate and cost.
+>
+> **Review fixes in M3:**
+>
+> - **Unit counting.** `max_items_per_day` counts units: a whole-unit food counts its units (450 g of a 150 g cup is 3), anything else counts once per item.
+> - **Fibre is a warning, not an error.** Vegetables are often unweighed, so a fibre shortfall is only reported.
+> - **The cut floor binds generation.** A cut's 2000 kcal floor is a hard check on generated days.
+> - **Required meals.** Every day needs breakfast, lunch and dinner, plus any fixed meals; snacks are optional.
+> - **Fixed meals.** A slot is fixed only when the active plan has it on every day. Fixed meals keep their own snapshots, and the model gets their totals.
+
 - **Estimated cost:** about $0.25–0.35 per plan, and about double with a repair. Under $3/month. The actual cost of each run is logged and shown in Settings.
 
 ### 7.2 Payload (an allowlist; nothing is passed through unfiltered)

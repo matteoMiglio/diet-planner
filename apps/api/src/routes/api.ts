@@ -26,6 +26,7 @@ import { loadOwner, type Profile } from '../lib/owner.js';
 import { isValidTimeZone } from '../lib/time.js';
 import { currentCheckin, listGirths, saveCheckin } from '../services/checkins.js';
 import { addWeight, importTanitaRows, listMeasurements } from '../services/measurements.js';
+import type { PlanModel } from '../ai/model.js';
 import type { Pusher } from '../services/push.js';
 import { createPlanRoutes } from './plan.js';
 
@@ -33,6 +34,7 @@ export interface ApiDeps {
   db: Db;
   ingestToken?: string | undefined;
   pusher?: Pusher | null;
+  planModel?: PlanModel | null;
   now?: () => Date;
 }
 
@@ -105,7 +107,13 @@ async function runImport(
   return { dryRun, ...result, errors: parsed.errors };
 }
 
-export function createApi({ db, ingestToken, pusher = null, now = () => new Date() }: ApiDeps) {
+export function createApi({
+  db,
+  ingestToken,
+  pusher = null,
+  planModel = null,
+  now = () => new Date(),
+}: ApiDeps) {
   const api = new Hono();
   // Browser routes only; /ingest authenticates with its bearer token instead.
   const sameOrigin = sameOriginWrites();
@@ -220,6 +228,7 @@ export function createApi({ db, ingestToken, pusher = null, now = () => new Date
       profile: toProfileDto(owner),
       ingest: { configured: Boolean(ingestToken) },
       push: { publicKey: pusher?.publicKey ?? null, subscriptions: subs?.n ?? 0 },
+      ai: { configured: planModel !== null, model: planModel?.name ?? null },
     };
     return c.json(body);
   });
@@ -291,7 +300,7 @@ export function createApi({ db, ingestToken, pusher = null, now = () => new Date
     return c.json(result);
   });
 
-  api.route('/', createPlanRoutes({ db, now }));
+  api.route('/', createPlanRoutes({ db, now, planModel }));
 
   // ---------- Ingest (iOS Shortcuts, bearer token) ----------
 
