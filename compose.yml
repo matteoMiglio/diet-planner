@@ -1,0 +1,59 @@
+# Production stack. The app binds to the host's loopback only; `tailscale serve` on the host
+# terminates HTTPS and proxies to it (see docs/deploy.md).
+name: diet-planner
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    image: diet-planner-app:${APP_VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://diet:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/diet
+      TZ_DEFAULT: ${TZ_DEFAULT:-Europe/Rome}
+    ports:
+      - '127.0.0.1:${APP_PORT:-8080}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: diet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: diet
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U diet -d diet']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backup:
+    build: ./docker/backup
+    image: diet-planner-backup:${APP_VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ_DEFAULT:-Europe/Rome}
+      PGHOST: db
+      PGUSER: diet
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: diet
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

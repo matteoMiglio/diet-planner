@@ -1,0 +1,60 @@
+@import 'tailwindcss';
+
+/* Design tokens. Light by default, dark follows the system. */
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-2: #eeede7;
+  --text: #1b1d1a;
+  --muted: #6b6f68;
+  --border: #e2e0d8;
+  --accent: #2f6b4f;
+  --accent-soft: #dcefe3;
+  --warn: #a55a12;
+  --danger: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121412;
+    --surface: #1b1e1b;
+    --surface-2: #242824;
+    --text: #ecede8;
+    --muted: #9da39a;
+    --border: #2e332e;
+    --accent: #7cc59b;
+    --accent-soft: #1f3a2b;
+    --warn: #e0a15c;
+    --danger: #f2827a;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  font-variant-numeric: tabular-nums;
+}
