@@ -3,8 +3,11 @@
  * Dates travel as ISO strings (instants) or `YYYY-MM-DD` (local calendar dates).
  */
 import { z } from 'zod';
-import type { PlanDay, PlanDocument } from './plan.js';
+import type { PlanDay, PlanDocument, Slot } from './plan.js';
 import { PoolInfo } from './rules.js';
+import type { Role } from './rules.js';
+import { canonicalBarcode } from './gtin.js';
+import type { NutriCategory } from './scores.js';
 
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM');
@@ -340,6 +343,22 @@ export const FoodInput = z.object({
   notes: z.string().max(1000).nullable().optional(),
   archived: z.boolean().optional(),
   pool: PoolInfo.optional(),
+  /** Set when a scanned product is saved from its label. */
+  barcode: z
+    .string()
+    .transform((v, ctx) => {
+      const code = canonicalBarcode(v);
+      if (code === null) {
+        ctx.addIssue({ code: 'custom', message: "Isn't a valid EAN/UPC barcode." });
+        return z.NEVER;
+      }
+      return code;
+    })
+    .nullable()
+    .optional(),
+  sugarG: per100.nullable().optional(),
+  satFatG: per100.nullable().optional(),
+  saltG: per100.nullable().optional(),
 });
 export type FoodInput = z.infer<typeof FoodInput>;
 export const FoodPatch = FoodInput.partial();
@@ -359,6 +378,20 @@ export interface FoodDto {
   notes: string | null;
   archived: boolean;
   pool: PoolInfo;
+  sugarG: number | null;
+  satFatG: number | null;
+  saltG: number | null;
+  /** Packaged-product data, when the food came from a barcode. */
+  product: {
+    barcode: string;
+    source: 'off' | 'custom' | 'opennutrition';
+    nutriscoreGrade: string | null;
+    /** Nutri-Score category with its own protein rule, from Open Food Facts categories. */
+    category: NutriCategory;
+    novaGroup: number | null;
+    additives: string[] | null;
+    ingredientsText: string | null;
+  } | null;
 }
 
 export interface MealPlanDto {
@@ -377,4 +410,74 @@ export interface TodayDto {
   dayType: 'training' | 'rest';
   targets: DayTargetsDto | null;
   plan: { id: string; name: string; day: PlanDay } | null;
+}
+
+// ---------- M4: scanning and the food log ----------
+
+export interface ScanContextDto {
+  phase: 'cut' | 'maintenance' | 'surplus' | 'maingain' | 'recomp' | null;
+  /** Today's budget left: target − planned meals − extras logged. Null without targets. */
+  remaining: { kcal: number; fatG: number } | null;
+  slot: Slot;
+  slotRoles: Role[];
+  /** Rules this food would break today, in words. */
+  conflicts: string[];
+}
+
+export type BarcodeLookupDto =
+  | { status: 'found'; source: 'local' | 'open_food_facts'; food: FoodDto; context: ScanContextDto }
+  | { status: 'not_found' | 'incomplete'; reason: string | null };
+
+export const LogFoodRequest = z.object({
+  foodId: z.uuid(),
+  grams: z.number().positive().max(5000),
+  slot: z
+    .enum(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack'])
+    .nullable()
+    .optional(),
+  via: z.enum(['scan', 'search', 'quick_add']),
+  /** Defaults to today in the profile's timezone. */
+  date: localDate.optional(),
+});
+export type LogFoodRequest = z.infer<typeof LogFoodRequest>;
+
+export interface FoodLogEntryDto {
+  id: string;
+  loggedOn: string;
+  slot: string | null;
+  foodId: string | null;
+  name: string;
+  grams: number;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  via: 'scan' | 'search' | 'quick_add';
+  createdAt: string;
+}
+
+export interface FoodLogDayDto {
+  date: string;
+  entries: FoodLogEntryDto[];
+  totals: { kcal: number; proteinG: number; carbsG: number; fatG: number };
+}
+
+/** What Claude read off a nutrition label photo; reviewed by the person before saving. */
+export interface LabelReadingDto {
+  name: string | null;
+  brand: string | null;
+  servingG: number | null;
+  per100: {
+    kcal: number | null;
+    proteinG: number | null;
+    carbsG: number | null;
+    sugarG: number | null;
+    fatG: number | null;
+    satFatG: number | null;
+    fibreG: number | null;
+    saltG: number | null;
+  };
+  /** Anything the reader was unsure about, in plain words. */
+  notes: string[];
+  costUsd: number;
 }

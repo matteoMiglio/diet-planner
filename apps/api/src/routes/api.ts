@@ -29,12 +29,15 @@ import { addWeight, importTanitaRows, listMeasurements } from '../services/measu
 import type { PlanModel } from '../ai/model.js';
 import type { Pusher } from '../services/push.js';
 import { createPlanRoutes } from './plan.js';
+import { createScanRoutes } from './scan.js';
 
 export interface ApiDeps {
   db: Db;
   ingestToken?: string | undefined;
   pusher?: Pusher | null;
   planModel?: PlanModel | null;
+  /** Fetch used for Open Food Facts; tests pass a fake. */
+  fetchOff?: typeof fetch;
   now?: () => Date;
 }
 
@@ -112,6 +115,7 @@ export function createApi({
   ingestToken,
   pusher = null,
   planModel = null,
+  fetchOff = fetch,
   now = () => new Date(),
 }: ApiDeps) {
   const api = new Hono();
@@ -301,6 +305,7 @@ export function createApi({
   });
 
   api.route('/', createPlanRoutes({ db, now, planModel }));
+  api.route('/', createScanRoutes({ db, now, planModel, fetchOff }));
 
   // ---------- Ingest (iOS Shortcuts, bearer token) ----------
 

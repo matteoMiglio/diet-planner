@@ -22,6 +22,20 @@ export function toFoodDto(f: Food): FoodDto {
     units: f.units,
     notes: f.notes,
     archived: f.archived,
+    sugarG: f.sugarG,
+    satFatG: f.satFatG,
+    saltG: f.saltG,
+    product: f.barcode
+      ? {
+          barcode: f.barcode,
+          source: f.source as NonNullable<FoodDto['product']>['source'],
+          nutriscoreGrade: f.nutriscoreGrade,
+          category: f.nutriCategory as NonNullable<FoodDto['product']>['category'],
+          novaGroup: f.novaGroup,
+          additives: f.additives,
+          ingredientsText: f.ingredientsText,
+        }
+      : null,
     pool: {
       inPool: f.inPool,
       role: f.role as FoodDto['pool']['role'],
@@ -106,9 +120,19 @@ function checkEnergy(input: Pick<FoodInput, 'kcal' | 'proteinG' | 'carbsG' | 'fa
   }
 }
 
+/** Barcodes arrive canonical (FoodInput normalises them), so equal codes compare equal. */
+async function checkBarcodeFree(db: Db, userId: string, barcode: string) {
+  const [taken] = await db
+    .select({ id: food.id })
+    .from(food)
+    .where(and(eq(food.userId, userId), eq(food.barcode, barcode)));
+  if (taken) throw new HttpError(409, 'barcode_taken', 'A food with this barcode already exists.');
+}
+
 export async function createFood(db: Db, userId: string, input: FoodInput) {
   checkEnergy(input);
   checkPortionUnit(input.units ?? {}, input.pool);
+  if (input.barcode) await checkBarcodeFree(db, userId, input.barcode);
   const [row] = await db
     .insert(food)
     .values({
@@ -123,6 +147,10 @@ export async function createFood(db: Db, userId: string, input: FoodInput) {
       basis: input.basis ?? 'as_sold',
       units: input.units ?? {},
       notes: input.notes ?? null,
+      barcode: input.barcode ?? null,
+      sugarG: input.sugarG ?? null,
+      satFatG: input.satFatG ?? null,
+      saltG: input.saltG ?? null,
       ...poolColumns(input.pool),
     })
     .returning();
@@ -142,6 +170,8 @@ export async function updateFood(db: Db, userId: string, id: string, input: Food
   checkEnergy({ ...existing, ...patch } as FoodInput);
   // Check the food as it will be after the update: new units against the existing pool rule too.
   checkPortionUnit(patch.units ?? existing.units, patch.pool ?? toFoodDto(existing).pool);
+  if (patch.barcode && patch.barcode !== existing.barcode)
+    await checkBarcodeFree(db, userId, patch.barcode);
   const { pool, ...columns } = patch;
   const [row] = await db
     .update(food)

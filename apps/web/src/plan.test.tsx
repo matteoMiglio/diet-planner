@@ -18,6 +18,10 @@ const oats: FoodDto = {
   units: {},
   notes: null,
   archived: false,
+  sugarG: null,
+  satFatG: null,
+  saltG: null,
+  product: null,
   pool: {
     inPool: true,
     role: 'main_carb',

@@ -469,6 +469,21 @@ Result sheet: both scores with their parts, macros per 100 g and per typical por
 
 ---
 
+> **Built in M4:**
+>
+> - **Products become foods.** Barcode lookups are cached as foods (`source: off`, outside the planning pool) with their Open Food Facts product data. A unique (user, barcode) index makes concurrent scans safe.
+> - **Computed Nutri-Score.** When Open Food Facts has no grade (it often says "unknown", even for well-known products), the 2023 Nutri-Score is computed from the nutrients, with the cheese and red-meat protein rules taken from Open Food Facts categories. Fruit and vegetable percentage is treated as 0. Without sugars, saturated fat or salt the computed grade isn't used: nutrition counts as unavailable.
+> - **Today's budget.** The "fits today" budget is today's target minus the active plan's default meals minus logged extras; meal check-offs don't exist yet.
+> - **Label photos never reach the server's disk.** The browser re-encodes them, which also strips EXIF. The server reads them in memory for one Claude call. Label reads are not logged as AI runs: their cost is shown in the response.
+> - **The food log** keeps a macro snapshot per entry, like plan items.
+>
+> **Review fixes in M4:**
+>
+> - **One code per product.** Barcodes are stored and looked up as EAN-13 (UPC-A, GTIN-14 with a leading zero and UPC-E are expanded); EAN-8 stays as it is.
+> - **Blank values are missing.** Open Food Facts nutrients that are blank or out of range are stored as unknown, not zero.
+> - **Max-per-day counts units** in the scan context, as the plan validator does.
+> - **The camera is always released**, including when permission arrives after the scanner was closed.
+
 ## 10. Reminders (the cadence fix)
 
 Web push to the installed app (iOS 16.4+). A once-a-minute check in the app process sends them, and a `notification_log` row per kind and day keeps each one to a single send, across restarts too:

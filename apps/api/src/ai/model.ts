@@ -10,6 +10,8 @@ export interface ModelCall<T extends z.ZodType> {
   user: string;
   schema: T;
   maxTokens: number;
+  /** Images sent before the text, e.g. a nutrition label photo (base64, no data: prefix). */
+  images?: { mediaType: 'image/jpeg' | 'image/png' | 'image/webp'; data: string }[];
 }
 
 export interface ModelUsage {
@@ -189,7 +191,18 @@ export function createClaudeModel(opts: {
             thinking: { type: 'adaptive' },
             output_config: { effort: opts.effort, format: { type: 'json_schema', schema } },
             system: [{ type: 'text', text: c.system, cache_control: { type: 'ephemeral' } }],
-            messages: [{ role: 'user', content: c.user }],
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  ...(c.images ?? []).map((img) => ({
+                    type: 'image' as const,
+                    source: { type: 'base64' as const, media_type: img.mediaType, data: img.data },
+                  })),
+                  { type: 'text' as const, text: c.user },
+                ],
+              },
+            ],
           },
           { signal: abort.signal },
         );

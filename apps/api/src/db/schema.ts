@@ -336,6 +336,14 @@ export const food = pgTable(
     units: jsonb().$type<Record<string, number>>().notNull().default({}),
     notes: text(),
     archived: boolean().notNull().default(false),
+    // Product data from Open Food Facts (spec §9), when the food came from a barcode.
+    nutriscoreGrade: text(),
+    /** Nutri-Score category with its own protein rule: general, cheese or red_meat. */
+    nutriCategory: text().notNull().default('general'),
+    novaGroup: integer(),
+    additives: text().array(),
+    ingredientsText: text(),
+    offFetchedAt: timestamp({ withTimezone: true }),
     // Planning pool (spec §5.3): what the AI may use, and how.
     inPool: boolean().notNull().default(false),
     role: text().notNull().default('other'),
@@ -358,12 +366,19 @@ export const food = pgTable(
     ),
     check('food_priority_check', sql`${t.priority} in ('high', 'medium', 'low')`),
     check('food_source_check', sql`${t.source} in ('custom', 'off', 'opennutrition')`),
+    check(
+      'food_nutri_category_check',
+      sql`${t.nutriCategory} in ('general', 'cheese', 'red_meat')`,
+    ),
     check('food_basis_check', sql`${t.basis} in ('raw', 'dry', 'cooked', 'drained', 'as_sold')`),
     check(
       'food_macros_check',
       sql`${t.kcal} >= 0 and ${t.proteinG} >= 0 and ${t.carbsG} >= 0 and ${t.fatG} >= 0`,
     ),
     index('food_user_name_idx').on(t.userId, t.name),
+    uniqueIndex('food_user_barcode_unique')
+      .on(t.userId, t.barcode)
+      .where(sql`${t.barcode} is not null`),
   ],
 );
 
@@ -435,5 +450,37 @@ export const aiRun = pgTable(
     uniqueIndex('ai_run_one_active')
       .on(t.userId)
       .where(sql`${t.status} in ('queued', 'running')`),
+  ],
+);
+
+// ---------- M4: food log ----------
+
+/**
+ * What was eaten beyond the plan (scans, searches, quick adds). Each entry keeps a snapshot
+ * of the food's values, so editing or deleting a food never rewrites past intake.
+ */
+export const foodLog = pgTable(
+  'food_log',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: ownerId(),
+    /** Local calendar day in the profile's timezone. */
+    loggedOn: date().notNull(),
+    slot: text(),
+    foodId: uuid().references(() => food.id, { onDelete: 'set null' }),
+    name: text().notNull(),
+    grams: num(6, 1).notNull(),
+    kcal: num(7, 1).notNull(),
+    proteinG: num(6, 1).notNull(),
+    carbsG: num(6, 1).notNull(),
+    fatG: num(6, 1).notNull(),
+    fibreG: num(6, 1),
+    via: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('food_log_user_day_idx').on(t.userId, t.loggedOn),
+    check('food_log_via_check', sql`${t.via} in ('scan', 'search', 'quick_add')`),
+    check('food_log_grams_check', sql`${t.grams} > 0 and ${t.grams} <= 5000`),
   ],
 );

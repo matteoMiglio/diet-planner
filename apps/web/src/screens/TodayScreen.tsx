@@ -1,6 +1,12 @@
-import type { CurrentCheckinDto, PlanMeal, ProgressDto, TodayDto } from '@diet/shared';
+import type {
+  CurrentCheckinDto,
+  FoodLogDayDto,
+  PlanMeal,
+  ProgressDto,
+  TodayDto,
+} from '@diet/shared';
 import { add, optionMacros, SLOT_LABEL, ZERO } from '@diet/shared';
-import { ChevronRight, ClipboardCheck, Utensils } from 'lucide-react';
+import { ChevronRight, ClipboardCheck, Utensils, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../api';
@@ -31,6 +37,7 @@ export function TodayScreen() {
           onLogged={() => Promise.all([progress.reload(), checkin.reload()]).then(() => undefined)}
         />
         <TodayMeals />
+        <ExtrasCard />
       </div>
     </>
   );
@@ -245,5 +252,54 @@ function TodayMeals() {
         );
       })}
     </section>
+  );
+}
+
+/** What was eaten beyond the plan today (from Scan). */
+function ExtrasCard() {
+  const log = useQuery<FoodLogDayDto>('/food-log');
+  const [error, setError] = useState<string | null>(null);
+  if (!log.data || log.data.entries.length === 0) return null;
+
+  async function remove(id: string) {
+    setError(null);
+    try {
+      await api.delete(`/food-log/${id}`);
+      await log.reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    }
+  }
+
+  return (
+    <Card className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <SectionTitle>Also eaten</SectionTitle>
+        <span className="text-sm text-muted">
+          {log.data.totals.kcal} kcal · P {log.data.totals.proteinG}
+        </span>
+      </div>
+      <ul className="divide-y divide-border">
+        {log.data.entries.map((e) => (
+          <li key={e.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+            <span className="min-w-0">
+              <span className="block truncate">{e.name}</span>
+              <span className="block text-xs text-muted">
+                {Math.round(e.grams)} g · {Math.round(e.kcal)} kcal · P {Math.round(e.proteinG)}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => void remove(e.id)}
+              aria-label={`Remove ${e.name}`}
+              className="rounded-full p-1.5 text-muted hover:bg-surface-2"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </Card>
   );
 }
