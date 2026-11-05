@@ -9,6 +9,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // A custom service worker, because reminders need push and notificationclick handlers.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       // Icons are generated from public/icon.svg at build time.
       // index.html sets light/dark theme colours itself.
       pwaAssets: { image: 'public/icon.svg', injectThemeColor: false },
@@ -20,10 +24,6 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#f6f5f1',
         theme_color: '#2f6b4f',
-      },
-      workbox: {
-        // The API is never cached or answered by the service worker.
-        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],

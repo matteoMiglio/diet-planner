@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { createDb } from './db/client.js';
 import { ensureOwner, runMigrations } from './db/migrate.js';
 import { loadEnv } from './env.js';
+import { createPusher, startReminderLoop } from './services/push.js';
 
 const env = loadEnv();
 const { db, sql } = createDb(env.DATABASE_URL);
@@ -11,10 +12,24 @@ const { db, sql } = createDb(env.DATABASE_URL);
 await runMigrations(db);
 await ensureOwner(db, env.TZ_DEFAULT);
 
+const pusher =
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT
+    ? createPusher({
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
+        subject: env.VAPID_SUBJECT,
+      })
+    : null;
+if (!pusher) console.warn('VAPID keys not set: push reminders are off');
+if (!env.INGEST_TOKEN) console.warn('INGEST_TOKEN not set: the Shortcut endpoints are off');
+const stopReminders = pusher ? startReminderLoop(db, pusher) : () => {};
+
 const app = createApp({
   db,
   version: env.APP_VERSION,
   webDist: env.WEB_DIST ? path.resolve(env.WEB_DIST) : undefined,
+  ingestToken: env.INGEST_TOKEN,
+  pusher,
 });
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
@@ -25,6 +40,7 @@ let shuttingDown = false;
 function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
+  stopReminders();
   console.log(`${signal} received, shutting down`);
   server.close(() => {
     sql.end({ timeout: 5 }).finally(() => process.exit(0));

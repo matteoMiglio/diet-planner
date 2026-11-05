@@ -75,7 +75,7 @@ iPhone / laptop (installed web app, on Tailscale)
 | UI kit          | Tailwind + shadcn/ui                                           | Fast to build, and accessible by default.                                                                                      |
 | API             | Hono on Node                                                   | Small and typed. Serves the API and the static build from one origin.                                                          |
 | DB              | Postgres 17 + Drizzle ORM                                      | Typed queries, SQL migrations. Status columns are `text` + `CHECK` constraints, not Postgres enums, so changing them is cheap. |
-| Jobs            | pg-boss                                                        | AI jobs and scheduled push reminders, with no Redis.                                                                           |
+| Jobs            | pg-boss                                                        | AI jobs (M3), with no Redis. Reminders don't need it: a minute timer plus an idempotent log.                                   |
 | Solver          | `javascript-lp-solver` (small integer program)                 | The portion solver (§7.5) has about 6–10 variables per day.                                                                    |
 | Barcode         | `zxing-wasm`                                                   | iOS Safari has no `BarcodeDetector`.                                                                                           |
 | Charts          | Recharts                                                       | Trend lines with target bands.                                                                                                 |
@@ -446,7 +446,7 @@ Result sheet: both scores with their parts, macros per 100 g and per typical por
 
 ## 10. Reminders (the cadence fix)
 
-Web push to the installed app (iOS 16.4+), scheduled by pg-boss:
+Web push to the installed app (iOS 16.4+). A once-a-minute check in the app process sends them, and a `notification_log` row per kind and day keeps each one to a single send, across restarts too:
 
 | When                                                | Message                                                       | Opens                                      |
 | --------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
