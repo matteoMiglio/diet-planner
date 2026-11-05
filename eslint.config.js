@@ -4,7 +4,16 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/coverage/**', 'apps/api/drizzle/**', 'apps/web/dev-dist/**'] },
+  {
+    // local/ is gitignored personal tooling (e.g. the vault importer).
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      'apps/api/drizzle/**',
+      'apps/web/dev-dist/**',
+      'local/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
