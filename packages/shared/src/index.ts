@@ -4,3 +4,6 @@ export * from './trend.js';
 export * from './api.js';
 export * from './plan.js';
 export * from './engine.js';
+export * from './rules.js';
+export * from './validate.js';
+export * from './solver.js';

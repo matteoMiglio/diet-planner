@@ -73,6 +73,7 @@ const settings: SettingsDto = {
   },
   ingest: { configured: true },
   push: { publicKey: null, subscriptions: 0 },
+  ai: { configured: false, model: null },
 };
 
 type Call = { method: string; path: string; body: unknown };

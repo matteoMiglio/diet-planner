@@ -1,9 +1,10 @@
-import type { FoodDto, FoodInput } from '@diet/shared';
+import type { FoodDto, FoodInput, PoolInfo, Role, Slot } from '@diet/shared';
+import { PRIORITIES, ROLE_LABEL, ROLES, SLOT_LABEL, SLOTS } from '@diet/shared';
 import { Plus, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { api, ApiError } from '../api';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, NumberField, parseDecimal } from '../components/ui';
+import { Button, Card, ErrorNote, NumberField, parseDecimal, Segmented } from '../components/ui';
 import { useQuery } from '../useQuery';
 
 export function FoodsScreen() {
@@ -80,7 +81,14 @@ function FoodList({ foods, onPick }: { foods: FoodDto[]; onPick: (f: FoodDto) =>
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-2"
             >
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{f.name}</span>
+                <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+                  {f.name}
+                  {f.pool.inPool && (
+                    <span className="rounded bg-accent-soft px-1.5 text-[10px] font-semibold text-accent uppercase">
+                      pool
+                    </span>
+                  )}
+                </span>
                 {f.brand && <span className="block truncate text-xs text-muted">{f.brand}</span>}
               </span>
               <span className="shrink-0 text-right text-xs text-muted">
@@ -122,6 +130,15 @@ function FoodSheet({
   const [fat, setFat] = useState(text(food?.fatG));
   const [fibre, setFibre] = useState(text(food?.fibreG));
   const [basis, setBasis] = useState<FoodDto['basis']>(food?.basis ?? 'as_sold');
+  const [pool, setPool] = useState<PoolInfo>(
+    food?.pool ?? {
+      inPool: true,
+      role: 'other',
+      preferredSlots: [],
+      priority: 'medium',
+      portion: { kind: 'flexible', stepG: 5 },
+    },
+  );
   const [units, setUnits] = useState(
     Object.entries(food?.units ?? {}).map(([unit, grams]) => ({ unit, grams: String(grams) })),
   );
@@ -152,9 +169,13 @@ function FoodSheet({
       fibreG: fib,
       basis,
       units: unitMap,
+      pool,
       ...(archived !== undefined && { archived }),
     };
     if (!body.name) return setError('Give the food a name.');
+    if (pool.portion.kind === 'fixed_unit' && !(pool.portion.unit in unitMap)) {
+      return setError(`Whole-unit portions need the "${pool.portion.unit}" portion defined above.`);
+    }
     setSaving(true);
     try {
       if (food) await api.patch(`/foods/${food.id}`, body);
@@ -253,6 +274,12 @@ function FoodSheet({
           <Plus size={16} aria-hidden /> Add a portion
         </Button>
 
+        <PoolFields
+          pool={pool}
+          onChange={setPool}
+          units={units.map((u) => u.unit.trim()).filter(Boolean)}
+        />
+
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex gap-2 pt-2">
           <Button type="submit" disabled={saving} className="flex-1">
@@ -287,5 +314,143 @@ function TextRow({
         className="min-h-10 w-56 rounded-xl border border-border bg-bg px-3 text-base outline-none focus:border-accent"
       />
     </label>
+  );
+}
+
+function PoolFields({
+  pool,
+  onChange,
+  units,
+}: {
+  pool: PoolInfo;
+  onChange: (p: PoolInfo) => void;
+  units: string[];
+}) {
+  const set = (patch: Partial<PoolInfo>) => onChange({ ...pool, ...patch });
+  return (
+    <div className="space-y-3 pt-2">
+      <label className="flex items-center justify-between">
+        <span>
+          <span className="block text-xs font-semibold tracking-wide text-muted uppercase">
+            Planning pool
+          </span>
+          <span className="block text-xs text-muted">Foods the plan generator may use.</span>
+        </span>
+        <input
+          type="checkbox"
+          checked={pool.inPool}
+          onChange={(e) => set({ inPool: e.target.checked })}
+          className="size-5 accent-[var(--accent)]"
+          aria-label="In the planning pool"
+        />
+      </label>
+      {pool.inPool && (
+        <>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm">Role</span>
+            <select
+              value={pool.role}
+              onChange={(e) => set({ role: e.target.value as Role })}
+              className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABEL[r]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div>
+            <p className="mb-1 text-sm">Priority</p>
+            <Segmented
+              label="Priority"
+              options={PRIORITIES.map((p) => ({
+                value: p,
+                label: p[0]!.toUpperCase() + p.slice(1),
+              }))}
+              value={pool.priority}
+              onChange={(v) => v && set({ priority: v })}
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-sm">Preferred meals</p>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Preferred meals">
+              {SLOTS.map((slot: Slot) => {
+                const on = pool.preferredSlots.includes(slot);
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      set({
+                        preferredSlots: on
+                          ? pool.preferredSlots.filter((x) => x !== slot)
+                          : [...pool.preferredSlots, slot],
+                      })
+                    }
+                    className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                      on ? 'bg-accent text-bg' : 'bg-surface-2 text-muted'
+                    }`}
+                  >
+                    {SLOT_LABEL[slot]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm">Portions in a plan</p>
+            <Segmented
+              label="Portioning"
+              options={[
+                { value: 'flexible', label: 'Any amount' },
+                { value: 'fixed_unit', label: 'Whole units' },
+              ]}
+              value={pool.portion.kind}
+              onChange={(v) =>
+                v &&
+                set({
+                  portion:
+                    v === 'flexible'
+                      ? { kind: 'flexible', stepG: 5 }
+                      : { kind: 'fixed_unit', unit: units[0] ?? '' },
+                })
+              }
+            />
+            {pool.portion.kind === 'flexible' ? (
+              <NumberField
+                label="In steps of"
+                unit="g"
+                value={String(pool.portion.stepG)}
+                onChange={(v) => {
+                  const step = parseDecimal(v);
+                  if (step && step > 0) set({ portion: { kind: 'flexible', stepG: step } });
+                }}
+              />
+            ) : units.length === 0 ? (
+              <p className="text-xs text-warn">
+                Add a portion above (e.g. cup = 150 g) to plan in whole units.
+              </p>
+            ) : (
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-sm">Unit</span>
+                <select
+                  value={pool.portion.unit}
+                  onChange={(e) => set({ portion: { kind: 'fixed_unit', unit: e.target.value } })}
+                  className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
+                >
+                  {units.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

@@ -18,6 +18,13 @@ const oats: FoodDto = {
   units: {},
   notes: null,
   archived: false,
+  pool: {
+    inPool: true,
+    role: 'main_carb',
+    preferredSlots: ['breakfast'],
+    priority: 'high',
+    portion: { kind: 'flexible', stepG: 5 },
+  },
 };
 const yogurt: FoodDto = {
   ...oats,
@@ -324,5 +331,123 @@ describe('Plan editor rows', () => {
     expect(screen.getByLabelText('Amount of Oats')).toHaveValue('40');
     fireEvent.click(screen.getByRole('tab', { name: 'Tue' }));
     expect(screen.getByLabelText('Amount of Oats')).toHaveValue('60');
+  });
+});
+
+describe('Plan generation', () => {
+  const run = (patch: object) => ({
+    id: '55555555-5555-4555-8555-555555555555',
+    status: 'running',
+    model: 'claude-opus-5-5',
+    createdAt: '2026-11-05T11:00:00Z',
+    finishedAt: null,
+    costUsd: 0,
+    error: null,
+    planId: null,
+    result: null,
+    ...patch,
+  });
+
+  it('starts a generation with preferences and shows the draft when it is ready', async () => {
+    let runs: object[] = [];
+    fakeApi({
+      'GET /plan': overview(),
+      'GET /ai-runs': () => Response.json(runs),
+      'POST /plans/generate': () => {
+        runs = [
+          run({
+            status: 'succeeded',
+            planId: planDraft.id,
+            costUsd: 0.31,
+            result: {
+              summary: 'Fish twice, chicken at dinner.',
+              repaired: false,
+              solverChanges: ['Mon lunch: Rice 80 → 90 g'],
+              errors: [],
+              warnings: [],
+            },
+          }),
+        ];
+        return Response.json(runs[0], { status: 202 });
+      },
+    });
+    renderAt('/plan');
+    fireEvent.change(await screen.findByLabelText(/Anything for this week/), {
+      target: { value: 'more fish' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Generate/ }));
+    expect(await screen.findByText('New draft ready')).toBeInTheDocument();
+    expect(screen.getByText('Fish twice, chicken at dinner.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review the draft' })).toHaveAttribute(
+      'href',
+      `/plan/edit/${planDraft.id}`,
+    );
+    expect(screen.getByText('$0.31')).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/plans/generate')?.body).toEqual({
+      preferences: 'more fish',
+    });
+  });
+
+  it('shows progress while a run is going, and what failed when it fails', async () => {
+    fakeApi({ 'GET /plan': overview(), 'GET /ai-runs': [run({ status: 'running' })] });
+    renderAt('/plan');
+    expect(await screen.findByRole('status')).toHaveTextContent('Building the week');
+
+    fakeApi({
+      'GET /plan': overview(),
+      'GET /ai-runs': [
+        run({
+          status: 'failed',
+          error: 'The plan still breaks 2 check(s) after one repair.',
+          result: {
+            summary: '',
+            repaired: true,
+            solverChanges: [],
+            errors: ['Wed: 2,412 kcal vs target 2,200'],
+            warnings: [],
+          },
+        }),
+      ],
+    });
+    renderAt('/plan');
+    expect(await screen.findByText(/didn't produce a valid plan/)).toBeInTheDocument();
+    expect(screen.getByText('Wed: 2,412 kcal vs target 2,200')).toBeInTheDocument();
+  });
+});
+
+describe('Rules', () => {
+  it('adds a rule from a food search and fills in the wording', async () => {
+    fakeApi({
+      'GET /rules': [],
+      'GET /foods': [oats, yogurt],
+      'POST /rules': { id: 'r1', spec: {}, text: '', active: true },
+    });
+    renderAt('/rules');
+    fireEvent.click(await screen.findByRole('button', { name: /Add/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Type'), {
+      target: { value: 'max_items_per_day' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Search foods'), { target: { value: 'yog' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Greek yogurt 0%' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.path === '/rules')).toBe(true),
+    );
+    expect(calls.find((c) => c.path === '/rules' && c.method === 'POST')?.body).toEqual({
+      spec: { kind: 'max_items_per_day', foodIds: [yogurt.id], max: 2 },
+      text: 'At most 2 of Greek yogurt 0% per day.',
+      active: true,
+    });
+  });
+
+  it('needs at least one food', async () => {
+    fakeApi({ 'GET /rules': [], 'GET /foods': [oats] });
+    renderAt('/rules');
+    fireEvent.click(await screen.findByRole('button', { name: /Add/ }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pick at least one food');
   });
 });

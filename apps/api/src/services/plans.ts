@@ -22,7 +22,38 @@ export function toFoodDto(f: Food): FoodDto {
     units: f.units,
     notes: f.notes,
     archived: f.archived,
+    pool: {
+      inPool: f.inPool,
+      role: f.role as FoodDto['pool']['role'],
+      preferredSlots: f.preferredSlots as FoodDto['pool']['preferredSlots'],
+      priority: f.priority as FoodDto['pool']['priority'],
+      portion: f.portion,
+    },
   };
+}
+
+/** Flattens the API's nested `pool` into the food table's columns. */
+function poolColumns(pool: FoodInput['pool']) {
+  return pool
+    ? {
+        inPool: pool.inPool,
+        role: pool.role,
+        preferredSlots: pool.preferredSlots,
+        priority: pool.priority,
+        portion: pool.portion,
+      }
+    : {};
+}
+
+/** A fixed-unit portion must name one of the food's own units. */
+function checkPortionUnit(units: Record<string, number>, pool: FoodInput['pool']) {
+  if (pool?.portion.kind === 'fixed_unit' && !(pool.portion.unit in units)) {
+    throw new HttpError(
+      422,
+      'unknown_unit',
+      `Portion unit "${pool.portion.unit}" isn't one of this food's portions.`,
+    );
+  }
 }
 
 export function toPlanDto(p: MealPlan): MealPlanDto {
@@ -77,6 +108,7 @@ function checkEnergy(input: Pick<FoodInput, 'kcal' | 'proteinG' | 'carbsG' | 'fa
 
 export async function createFood(db: Db, userId: string, input: FoodInput) {
   checkEnergy(input);
+  checkPortionUnit(input.units ?? {}, input.pool);
   const [row] = await db
     .insert(food)
     .values({
@@ -91,6 +123,7 @@ export async function createFood(db: Db, userId: string, input: FoodInput) {
       basis: input.basis ?? 'as_sold',
       units: input.units ?? {},
       notes: input.notes ?? null,
+      ...poolColumns(input.pool),
     })
     .returning();
   return toFoodDto(row!);
@@ -107,7 +140,14 @@ export async function updateFood(db: Db, userId: string, id: string, input: Food
     Object.entries(input).filter(([, v]) => v !== undefined),
   ) as FoodPatch;
   checkEnergy({ ...existing, ...patch } as FoodInput);
-  const [row] = await db.update(food).set(patch).where(eq(food.id, id)).returning();
+  // Check the food as it will be after the update: new units against the existing pool rule too.
+  checkPortionUnit(patch.units ?? existing.units, patch.pool ?? toFoodDto(existing).pool);
+  const { pool, ...columns } = patch;
+  const [row] = await db
+    .update(food)
+    .set({ ...columns, ...poolColumns(pool) })
+    .where(eq(food.id, id))
+    .returning();
   return toFoodDto(row!);
 }
 

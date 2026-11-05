@@ -22,11 +22,12 @@ pnpm db:up                # Postgres on 127.0.0.1:5432 (dev + test databases)
 pnpm dev                  # API on :3000, web on :5173 (proxies /api)
 ```
 
-| Command                                              |                                                                     |
-| ---------------------------------------------------- | ------------------------------------------------------------------- |
-| `pnpm test`                                          | All tests. API tests need `pnpm db:up`; they wipe `diet_test` only. |
-| `pnpm lint` / `pnpm typecheck` / `pnpm format:check` | What CI runs.                                                       |
-| `pnpm build`                                         | Web bundle + single-file API bundle.                                |
-| `pnpm --filter @diet/api db:generate`                | Create a migration after changing `apps/api/src/db/schema.ts`.      |
+| Command                                              |                                                                                                             |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `pnpm test`                                          | All tests. API tests need `pnpm db:up`; they wipe `diet_test` only.                                         |
+| `pnpm lint` / `pnpm typecheck` / `pnpm format:check` | What CI runs.                                                                                               |
+| `pnpm build`                                         | Web bundle + single-file API bundle.                                                                        |
+| `pnpm --filter @diet/api db:generate`                | Create a migration after changing `apps/api/src/db/schema.ts`.                                              |
+| `pnpm --filter @diet/api eval:plan -- --runs 3`      | Real plan generations against a fixture: pass rate, repairs, cost. Needs `ANTHROPIC_API_KEY`; spends money. |
 
 Migrations run automatically when the API starts.

@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import type { PlanDay, PlanDocument } from './plan.js';
+import { PoolInfo } from './rules.js';
 
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM');
@@ -153,6 +154,30 @@ export interface SettingsDto {
   profile: ProfileDto;
   ingest: { configured: boolean };
   push: { publicKey: string | null; subscriptions: number };
+  ai: { configured: boolean; model: string | null };
+}
+
+export const GeneratePlanRequest = z.object({
+  /** Free text the model reads as tastes/constraints, e.g. "more fish, no lentils this week". */
+  preferences: z.string().trim().max(500).nullable().optional(),
+});
+
+export interface AiRunDto {
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  model: string;
+  createdAt: string;
+  finishedAt: string | null;
+  costUsd: number;
+  error: string | null;
+  planId: string | null;
+  result: {
+    summary: string;
+    repaired: boolean;
+    solverChanges: string[];
+    errors: string[];
+    warnings: string[];
+  } | null;
 }
 
 // ---------- Push ----------
@@ -314,6 +339,7 @@ export const FoodInput = z.object({
   units: z.record(z.string().trim().min(1).max(30), z.number().positive().max(3000)).optional(),
   notes: z.string().max(1000).nullable().optional(),
   archived: z.boolean().optional(),
+  pool: PoolInfo.optional(),
 });
 export type FoodInput = z.infer<typeof FoodInput>;
 export const FoodPatch = FoodInput.partial();
@@ -332,6 +358,7 @@ export interface FoodDto {
   units: Record<string, number>;
   notes: string | null;
   archived: boolean;
+  pool: PoolInfo;
 }
 
 export interface MealPlanDto {
