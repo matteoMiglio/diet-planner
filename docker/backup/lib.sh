@@ -1,5 +1,9 @@
 # Shared helpers for backup.sh and restore-test.sh. Sourced, not executed.
 
+# Dumps contain all personal data: readable by the owner only, including on the host's
+# ./backups bind mount.
+umask 077
+
 BACKUP_DIR=/backups
 LOCK_FILE="$BACKUP_DIR/.backup.lock"
 RESTIC_TAG=diet-planner
@@ -14,6 +18,7 @@ fail() {
 # One backup or restore test at a time: a manual run overlapping with cron waits (up to an
 # hour) instead of deleting the other run's files or racing on `restic init`.
 take_lock() {
+  chmod 700 "$BACKUP_DIR"
   exec 9>"$LOCK_FILE"
   waited=0
   # busybox flock has no timeout option, so poll.
