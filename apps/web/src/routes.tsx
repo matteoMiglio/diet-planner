@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router';
 import { Layout } from './components/Layout';
+import { CheckinScreen } from './screens/CheckinScreen';
 import { PlanScreen } from './screens/PlanScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
 import { ScanScreen } from './screens/ScanScreen';
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
       { path: 'scan', element: <ScanScreen /> },
       { path: 'progress', element: <ProgressScreen /> },
       { path: 'settings', element: <SettingsScreen /> },
+      { path: 'checkin', element: <CheckinScreen /> },
       { path: '*', element: <TodayScreen /> },
     ],
   },

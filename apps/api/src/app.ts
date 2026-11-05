@@ -7,8 +7,10 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 import type { Db } from './db/client.js';
+import { HttpError } from './lib/http.js';
+import { type ApiDeps, createApi } from './routes/api.js';
 
-export interface AppDeps {
+export interface AppDeps extends ApiDeps {
   db: Db;
   version: string;
   /** Absolute path to the built web app. When omitted, only the API is served. */
@@ -34,8 +36,16 @@ async function pingDb(db: Db): Promise<boolean> {
   }
 }
 
-export function createApp({ db, version, webDist, log = true }: AppDeps) {
+export function createApp({ db, version, webDist, log = true, ...apiDeps }: AppDeps) {
   const app = new Hono();
+
+  app.onError((err, c) => {
+    if (err instanceof HttpError) {
+      return c.json({ error: err.code, message: err.message, details: err.details }, err.status);
+    }
+    console.error(err);
+    return c.json({ error: 'internal', message: 'Something went wrong on the server.' }, 500);
+  });
 
   if (log) app.use(logger());
   app.use(
@@ -66,6 +76,7 @@ export function createApp({ db, version, webDist, log = true }: AppDeps) {
     return c.json(body, dbOk ? 200 : 503);
   });
 
+  api.route('/', createApi({ db, ...apiDeps }));
   api.all('*', (c) => c.json({ error: 'not_found' }, 404));
   app.route('/api', api);
 

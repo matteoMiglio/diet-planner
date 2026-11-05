@@ -13,6 +13,10 @@ services:
     environment:
       DATABASE_URL: postgres://diet:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/diet
       TZ_DEFAULT: ${TZ_DEFAULT:-Europe/Rome}
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     ports:
       - '127.0.0.1:${APP_PORT:-8080}:3000'
     depends_on:
