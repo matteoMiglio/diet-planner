@@ -82,6 +82,18 @@ const label = (weekday: number): string => weekdays[weekday - 1] ?? `Weekday ${w
 const number = (value: number): string =>
   value.toLocaleString('en-US', { maximumFractionDigits: 3 });
 
+/**
+ * How many items an amount counts as for `max_items_per_day`: a whole-unit food counts its
+ * units (450 g of a 150 g cup is 3), any other food counts once.
+ */
+export function countedUnits(
+  food: { portion: PortionRule; units: Record<string, number> } | undefined,
+  grams: number,
+): number {
+  const unitG = food?.portion.kind === 'fixed_unit' ? food.units[food.portion.unit] : undefined;
+  return unitG ? Math.round(grams / unitG) : 1;
+}
+
 export function validatePlan(doc: PlanDocument, ctx: PlanContext): ValidationResult {
   const errors: PlanError[] = [];
   const warnings: PlanError[] = [];
@@ -216,16 +228,9 @@ export function validatePlan(doc: PlanDocument, ctx: PlanContext): ValidationRes
       }
       const matching = entries.filter((e) => rule.foodIds.includes(e.item.foodId));
       if (rule.kind === 'max_items_per_day') {
-        // Counts units: a whole-unit food counts its units (450 g of a 150 g cup is 3),
-        // any other food counts once per item.
         const count = matching
           .filter((e) => e.optionIndex === 0)
-          .reduce((sum, e) => {
-            const food = ctx.foods.get(e.item.foodId);
-            const unitG =
-              food?.portion.kind === 'fixed_unit' ? food.units[food.portion.unit] : undefined;
-            return sum + (unitG ? Math.round(e.item.grams / unitG) : 1);
-          }, 0);
+          .reduce((sum, e) => sum + countedUnits(ctx.foods.get(e.item.foodId), e.item.grams), 0);
         if (count > rule.max)
           add(
             'rule',

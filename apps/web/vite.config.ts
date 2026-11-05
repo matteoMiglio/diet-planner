@@ -13,6 +13,11 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      injectManifest: {
+        // Precache the barcode reader's WebAssembly too, so scanning works offline.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,wasm}'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+      },
       // Icons are generated from public/icon.svg at build time.
       // index.html sets light/dark theme colours itself.
       pwaAssets: { image: 'public/icon.svg', injectThemeColor: false },

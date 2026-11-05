@@ -7,3 +7,5 @@ export * from './engine.js';
 export * from './rules.js';
 export * from './validate.js';
 export * from './solver.js';
+export * from './scores.js';
+export * from './gtin.js';

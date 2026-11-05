@@ -52,6 +52,8 @@ export function createApp({ db, version, webDist, log = true, ...apiDeps }: AppD
     secureHeaders({
       contentSecurityPolicy: {
         defaultSrc: ["'self'"],
+        // The barcode reader is WebAssembly, served from this origin.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         connectSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
