@@ -10,3 +10,6 @@ backups/
 
 # Personal, machine-local tooling and data (e.g. the vault importer)
 local/
+
+# Playwright MCP screenshots and page snapshots
+.playwright-mcp/

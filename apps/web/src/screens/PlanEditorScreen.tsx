@@ -11,12 +11,24 @@ import type {
   Slot,
 } from '@diet/shared';
 import { dayMacros, itemMacros, SLOT_LABEL, SLOTS } from '@diet/shared';
-import { Copy, Plus, Search, Trash2, X } from 'lucide-react';
+import { Copy, Plus, Trash2, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { Input } from '@/ui/input';
 import { api, ApiError } from '../api';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, parseDecimal } from '../components/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/tabs';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/ui/command';
+import { BottomSheet } from '../components/BottomSheet';
+import {
+  Button,
+  Card,
+  ErrorNote,
+  parseDecimal,
+  OptionSelect,
+  Loading,
+  MultiToggle,
+} from '../components/ui';
 import { useQuery } from '../useQuery';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,8 +40,7 @@ export function PlanEditorScreen() {
   const overview = useQuery<PlanOverviewDto>('/plan');
 
   if (plan.status === 'error') return <ErrorNote>{plan.error.message}</ErrorNote>;
-  if (!plan.data || !foods.data || !overview.data)
-    return <p className="text-sm text-muted">Loading…</p>;
+  if (!plan.data || !foods.data || !overview.data) return <Loading />;
   return <Editor plan={plan.data} foods={foods.data} overview={overview.data} />;
 }
 
@@ -175,69 +186,65 @@ function Editor({
       </ScreenHeader>
 
       <div className="space-y-4">
-        <input
+        <Input
           aria-label="Plan name"
           value={name}
           onChange={(e) => {
             setName(e.target.value);
             touch();
           }}
-          className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-base font-semibold"
+          className="w-full font-semibold h-11"
         />
 
-        <div role="tablist" aria-label="Day" className="flex gap-1 rounded-xl bg-surface-2 p-1">
-          {WEEKDAYS.map((label, i) => (
-            <button
-              key={label}
-              type="button"
-              role="tab"
-              aria-selected={weekday === i + 1}
-              onClick={() => setWeekday(i + 1)}
-              className={`min-h-10 flex-1 rounded-lg text-xs font-semibold ${
-                weekday === i + 1 ? 'bg-surface text-text shadow-sm' : 'text-muted'
-              } ${overview.trainingWeekdays.includes(i + 1) ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={String(weekday)} onValueChange={(v) => setWeekday(Number(v))}>
+          <TabsList aria-label="Day" className="w-full">
+            {WEEKDAYS.map((label, i) => (
+              <TabsTrigger
+                key={label}
+                value={String(i + 1)}
+                // Training days are underlined.
+                className={
+                  overview.trainingWeekdays.includes(i + 1)
+                    ? 'underline decoration-primary decoration-2 underline-offset-4'
+                    : ''
+                }
+              >
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value={String(weekday)} className="space-y-4">
+            <DayTotals day={day} lookup={lookup} target={target} training={training} />
 
-        <DayTotals day={day} lookup={lookup} target={target} training={training} />
+            {day.meals.map((meal) => (
+              <MealCard
+                key={`${weekday}-${meal.slot}`}
+                meal={meal}
+                lookup={lookup}
+                foodById={foodById}
+                onChange={(fn) => updateMeal(meal.slot, fn)}
+                onAddFood={(option) => setPicking({ slot: meal.slot, option })}
+              />
+            ))}
 
-        {day.meals.map((meal) => (
-          <MealCard
-            key={`${weekday}-${meal.slot}`}
-            meal={meal}
-            lookup={lookup}
-            foodById={foodById}
-            onChange={(fn) => updateMeal(meal.slot, fn)}
-            onAddFood={(option) => setPicking({ slot: meal.slot, option })}
-          />
-        ))}
+            {missingSlots.length > 0 && (
+              <OptionSelect
+                label="Add a meal"
+                value=""
+                placeholder="+ Add a meal…"
+                options={missingSlots.map((s) => ({ value: s, label: SLOT_LABEL[s] }))}
+                onChange={addMeal}
+                className="min-h-11 w-full border-dashed"
+              />
+            )}
 
-        {missingSlots.length > 0 && (
-          <label className="flex items-center gap-2">
-            <span className="sr-only">Add a meal</span>
-            <select
-              value=""
-              onChange={(e) => e.target.value && addMeal(e.target.value as Slot)}
-              className="min-h-11 flex-1 rounded-xl border border-dashed border-border bg-transparent px-3 text-sm text-muted"
-            >
-              <option value="">+ Add a meal…</option>
-              {missingSlots.map((s) => (
-                <option key={s} value={s}>
-                  {SLOT_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {day.meals.length > 0 && (
-          <Button variant="ghost" onClick={() => setCopying(true)}>
-            <Copy size={16} aria-hidden /> Copy {WEEKDAYS[weekday - 1]} to other days
-          </Button>
-        )}
+            {day.meals.length > 0 && (
+              <Button variant="ghost" onClick={() => setCopying(true)}>
+                <Copy size={16} aria-hidden /> Copy {WEEKDAYS[weekday - 1]} to other days
+              </Button>
+            )}
+          </TabsContent>
+        </Tabs>
 
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="sticky bottom-24 flex gap-2 rounded-2xl bg-bg/90 py-2 backdrop-blur">
@@ -278,7 +285,7 @@ function DayTotals({
   ];
   return (
     <Card className="py-3">
-      <p className="mb-2 text-xs text-muted">
+      <p className="mb-2 text-xs text-muted-foreground">
         {training ? 'Training day' : 'Rest day'} · default options
       </p>
       <dl className="grid grid-cols-4 gap-2 text-center">
@@ -288,12 +295,12 @@ function DayTotals({
           const bad = label === 'Protein' ? off < -0.03 : Math.abs(off) > 0.05;
           return (
             <div key={label}>
-              <dt className="text-xs text-muted">{label}</dt>
+              <dt className="text-xs text-muted-foreground">{label}</dt>
               <dd className={`text-base font-bold ${goal && bad ? 'text-warn' : ''}`}>
                 {Math.round(value)}
                 {unit}
               </dd>
-              {goal !== undefined && <dd className="text-xs text-muted">/ {goal}</dd>}
+              {goal !== undefined && <dd className="text-xs text-muted-foreground">/ {goal}</dd>}
             </div>
           );
         })}
@@ -336,7 +343,7 @@ function MealCard({
     <Card className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">{SLOT_LABEL[meal.slot]}</h3>
-        <span className="flex items-center gap-2 text-sm text-muted">
+        <span className="flex items-center gap-2 text-sm text-muted-foreground">
           {Math.round(kcal)} kcal
           <button
             type="button"
@@ -349,66 +356,65 @@ function MealCard({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Options">
-        {meal.options.map((o, i) => (
-          <button
-            key={i}
-            type="button"
-            role="tab"
-            aria-selected={i === index}
-            onClick={() => setActive(i)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${i === index ? 'bg-accent text-bg' : 'bg-surface-2 text-muted'}`}
-          >
-            {o.label}
-            {i === 0 && <span className="font-normal"> · default</span>}
-          </button>
-        ))}
-        {meal.options.length < 6 && (
-          <button
-            type="button"
-            onClick={() => {
-              onChange((m) => {
-                m.options.push({ label: String.fromCharCode(65 + m.options.length), items: [] });
-                return m;
-              });
-              setActive(meal.options.length);
-            }}
-            className="rounded-lg px-2 py-1 text-xs font-medium text-accent"
-          >
-            + Option
-          </button>
-        )}
-        {meal.options.length > 1 && (
-          <button
-            type="button"
-            onClick={() => {
-              onChange((m) => {
-                m.options.splice(index, 1);
-                return m;
-              });
-              setActive(0);
-            }}
-            className="ml-auto text-xs text-muted"
-          >
-            Remove option {option.label}
-          </button>
-        )}
-      </div>
+      <Tabs value={String(index)} onValueChange={(v) => setActive(Number(v))}>
+        <div className="flex flex-wrap items-center gap-1">
+          <TabsList aria-label="Options">
+            {meal.options.map((o, i) => (
+              <TabsTrigger key={i} value={String(i)}>
+                {o.label}
+                {i === 0 && <span className="font-normal"> · default</span>}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {meal.options.length < 6 && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange((m) => {
+                  m.options.push({ label: String.fromCharCode(65 + m.options.length), items: [] });
+                  return m;
+                });
+                setActive(meal.options.length);
+              }}
+              className="rounded-lg px-2 py-1 text-xs font-medium text-primary"
+            >
+              + Option
+            </button>
+          )}
+          {meal.options.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange((m) => {
+                  m.options.splice(index, 1);
+                  return m;
+                });
+                setActive(0);
+              }}
+              className="ml-auto text-xs text-muted-foreground"
+            >
+              Remove option {option.label}
+            </button>
+          )}
+        </div>
 
-      <ul className="divide-y divide-border">
-        {option.items.map((item, i) => (
-          <ItemRow
-            key={`${item.foodId}-${i}`}
-            item={item}
-            food={foodById.get(item.foodId)}
-            per100={item.snapshot ?? lookup(item.foodId)}
-            onChange={(next) => setItem(i, next)}
-          />
-        ))}
-      </ul>
-      <Button variant="ghost" onClick={() => onAddFood(index)}>
-        <Plus size={16} aria-hidden /> Add food
-      </Button>
+        <TabsContent value={String(index)}>
+          <ul className="divide-y divide-border">
+            {option.items.map((item, i) => (
+              <ItemRow
+                key={`${item.foodId}-${i}`}
+                item={item}
+                food={foodById.get(item.foodId)}
+                per100={item.snapshot ?? lookup(item.foodId)}
+                onChange={(next) => setItem(i, next)}
+              />
+            ))}
+          </ul>
+          <Button variant="ghost" onClick={() => onAddFood(index)}>
+            <Plus size={16} aria-hidden /> Add food
+          </Button>
+        </TabsContent>
+      </Tabs>
     </Card>
   );
 }
@@ -450,14 +456,14 @@ function ItemRow({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm">{name}</span>
         {m && (
-          <span className="block text-xs text-muted">
+          <span className="block text-xs text-muted-foreground">
             {Math.round(m.kcal)} kcal · P {m.proteinG.toFixed(0)} · C {m.carbsG.toFixed(0)} · F{' '}
             {m.fatG.toFixed(0)}
             {unit !== 'g' && ` · ${Math.round(item.grams)} g`}
           </span>
         )}
       </span>
-      <input
+      <Input
         aria-label={`Amount of ${name}`}
         inputMode="decimal"
         value={shown}
@@ -467,29 +473,20 @@ function ItemRow({
           setDraft(e.target.value);
           commit(e.target.value);
         }}
-        className="w-16 rounded-lg border border-border bg-bg px-2 py-1.5 text-right text-base"
+        className="w-16 text-right"
       />
-      <select
-        aria-label={`Unit for ${name}`}
+      <OptionSelect
+        label={`Unit for ${name}`}
         value={unit}
-        onChange={(e) => {
-          const next = e.target.value;
-          commit(next === 'g' ? String(Math.round(item.grams)) : '1', next);
-        }}
-        className="rounded-lg border border-border bg-bg px-1.5 py-1.5 text-sm"
-      >
-        <option value="g">g</option>
-        {Object.keys(units).map((u) => (
-          <option key={u} value={u}>
-            {u}
-          </option>
-        ))}
-      </select>
+        size="sm"
+        options={['g', ...Object.keys(units)].map((u) => ({ value: u, label: u }))}
+        onChange={(next) => commit(next === 'g' ? String(Math.round(item.grams)) : '1', next)}
+      />
       <button
         type="button"
         aria-label={`Remove ${name}`}
         onClick={() => onChange(null)}
-        className="rounded-full p-1.5 text-muted hover:bg-surface-2"
+        className="rounded-full p-1.5 text-muted-foreground hover:bg-surface-2"
       >
         <X size={16} aria-hidden />
       </button>
@@ -512,61 +509,44 @@ function FoodPicker({
     (f) => !needle || `${f.name} ${f.brand ?? ''}`.toLowerCase().includes(needle),
   );
   return (
-    <div
-      className="fixed inset-0 z-20 flex items-end justify-center bg-black/40"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Pick a food"
-    >
-      <div className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-t-3xl bg-surface p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
-        <div className="mb-3 flex items-center gap-2">
-          <label className="flex flex-1 items-center gap-2 rounded-xl border border-border px-3">
-            <Search size={16} className="text-muted" aria-hidden />
-            <span className="sr-only">Search foods</span>
-            <input
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search foods"
-              className="min-h-11 flex-1 bg-transparent text-base outline-none"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-2 text-muted hover:bg-surface-2"
-          >
-            <X size={20} aria-hidden />
-          </button>
+    <BottomSheet title="Pick a food" onClose={onClose} focusFirstField>
+      {/* Our own matching (name or brand contains the text), so no cmdk filter. */}
+      <Command shouldFilter={false} className="overflow-visible">
+        {/* Stays in view while the list scrolls under it. */}
+        <div className="sticky top-0 z-10 mb-1 bg-popover">
+          <CommandInput
+            // 16 px: iOS Safari zooms into inputs with smaller text.
+            className="text-base"
+            autoFocus
+            value={q}
+            onValueChange={setQ}
+            placeholder="Search foods"
+            aria-label="Search foods"
+          />
         </div>
         {foods.length === 0 && (
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             No foods yet.{' '}
-            <Link to="/foods" className="font-semibold text-accent">
+            <Link to="/foods" className="font-semibold text-primary">
               Add your foods
             </Link>{' '}
             first (save this plan before leaving).
           </p>
         )}
-        <ul className="divide-y divide-border overflow-y-auto">
+        {/* The sheet scrolls, not the list. */}
+        <CommandList className="max-h-none overflow-visible">
+          {foods.length > 0 && <CommandEmpty>No food matches.</CommandEmpty>}
           {shown.map((f) => (
-            <li key={f.id}>
-              <button
-                type="button"
-                onClick={() => onPick(f)}
-                className="flex w-full justify-between gap-3 px-1 py-2.5 text-left hover:bg-surface-2"
-              >
-                <span className="truncate text-sm">{f.name}</span>
-                <span className="shrink-0 text-xs text-muted">
-                  {Math.round(f.kcal)} kcal · P {f.proteinG}
-                </span>
-              </button>
-            </li>
+            <CommandItem key={f.id} value={f.id} onSelect={() => onPick(f)} className="py-2.5">
+              <span className="truncate">{f.name}</span>
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                {Math.round(f.kcal)} kcal · P {f.proteinG}
+              </span>
+            </CommandItem>
           ))}
-        </ul>
-      </div>
-    </div>
+        </CommandList>
+      </Command>
+    </BottomSheet>
   );
 }
 
@@ -581,36 +561,25 @@ function CopySheet({
 }) {
   const [selected, setSelected] = useState<number[]>([]);
   return (
-    <div
-      className="fixed inset-0 z-20 flex items-end justify-center bg-black/40"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Copy day"
+    <BottomSheet
+      title={`Copy ${WEEKDAYS[from - 1]} to…`}
+      description="The chosen days' meals are replaced."
+      onClose={onClose}
     >
-      <div className="w-full max-w-xl space-y-3 rounded-t-3xl bg-surface p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]">
-        <h2 className="text-lg font-bold">Copy {WEEKDAYS[from - 1]} to…</h2>
-        <p className="text-sm text-muted">The chosen days' meals are replaced.</p>
-        <div className="flex gap-1">
-          {WEEKDAYS.map((label, i) =>
-            i + 1 === from ? null : (
-              <button
-                key={label}
-                type="button"
-                aria-pressed={selected.includes(i + 1)}
-                onClick={() =>
-                  setSelected(
-                    selected.includes(i + 1)
-                      ? selected.filter((d) => d !== i + 1)
-                      : [...selected, i + 1],
-                  )
-                }
-                className={`min-h-10 flex-1 rounded-lg text-xs font-semibold ${selected.includes(i + 1) ? 'bg-accent text-bg' : 'bg-surface-2 text-muted'}`}
-              >
-                {label}
-              </button>
-            ),
+      <div className="space-y-3">
+        <MultiToggle
+          label="Days"
+          fill
+          options={WEEKDAYS.flatMap((label, i) =>
+            i + 1 === from ? [] : [{ value: i + 1, label }],
           )}
-        </div>
+          value={selected}
+          onToggle={(day) =>
+            setSelected(
+              selected.includes(day) ? selected.filter((d) => d !== day) : [...selected, day],
+            )
+          }
+        />
         <div className="flex gap-2">
           <Button
             className="flex-1"
@@ -624,6 +593,6 @@ function CopySheet({
           </Button>
         </div>
       </div>
-    </div>
+    </BottomSheet>
   );
 }

@@ -2,6 +2,7 @@ import type { CheckinDto, CurrentCheckinDto, SaveCheckinRequest } from '@diet/sh
 import { Check, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Textarea } from '@/ui/textarea';
 import { api, ApiError } from '../api';
 import { ScreenHeader } from '../components/ScreenHeader';
 import {
@@ -13,6 +14,7 @@ import {
   parseDecimal,
   SectionTitle,
   Segmented,
+  Loading,
 } from '../components/ui';
 import { clockTime, shortDate } from '../format';
 import { useQuery } from '../useQuery';
@@ -42,7 +44,7 @@ export function CheckinScreen() {
       <ScreenHeader title="Check-in">
         {query.data ? `Week of ${shortDate(query.data.weekStart)}` : 'This week'}
       </ScreenHeader>
-      {query.status === 'loading' && <p className="text-sm text-muted">Loading…</p>}
+      {query.status === 'loading' && <Loading />}
       {query.status === 'error' && <ErrorNote>{query.error.message}</ErrorNote>}
       {query.data && <CheckinForm current={query.data} />}
     </>
@@ -136,7 +138,7 @@ function CheckinForm({ current }: { current: CurrentCheckinDto }) {
           autoFocus={params.get('focus') === 'weight'}
         />
         {current.latestWeightThisWeek && !weightTyped && (
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             From the scale reading on {shortDate(current.latestWeightThisWeek.measuredAt)} at{' '}
             {clockTime(current.latestWeightThisWeek.measuredAt)}. Type today’s weight to log a new
             reading.
@@ -153,7 +155,7 @@ function CheckinForm({ current }: { current: CurrentCheckinDto }) {
           <button
             type="button"
             onClick={() => setMoreGirths(true)}
-            className="flex items-center gap-1 text-sm font-medium text-accent"
+            className="flex items-center gap-1 text-sm font-medium text-primary"
           >
             <ChevronDown size={16} aria-hidden /> Chest, biceps, quad
           </button>
@@ -187,12 +189,12 @@ function CheckinForm({ current }: { current: CurrentCheckinDto }) {
         />
         <label className="block">
           <span className="text-sm">Notes</span>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             maxLength={2000}
-            className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-base outline-none focus:border-accent"
+            className="mt-1 w-full"
           />
         </label>
       </Card>
@@ -202,12 +204,12 @@ function CheckinForm({ current }: { current: CurrentCheckinDto }) {
         <Button type="submit" disabled={saving} className="flex-1">
           <Check size={18} aria-hidden /> {saving ? 'Saving…' : 'Save check-in'}
         </Button>
-        <Link to="/" className="px-3 text-sm text-muted">
+        <Link to="/" className="px-3 text-sm text-muted-foreground">
           Cancel
         </Link>
       </div>
       {incomplete && (
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           You can save part of it now. The check-in counts once plan and training are answered.
         </p>
       )}

@@ -5,6 +5,12 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from './routes';
 
+/** Picks an option from a shadcn (Radix) Select: open it from the keyboard, click the option. */
+async function choose(trigger: HTMLElement, option: string) {
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('option', { name: option }));
+}
+
 const oats: FoodDto = {
   id: '11111111-1111-4111-8111-111111111111',
   name: 'Oats',
@@ -285,11 +291,11 @@ describe('Plan editor', () => {
       [`PUT /plans/${planDraft.id}`]: planDraft,
     });
     renderAt(`/plan/edit/${planDraft.id}`);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Mon' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Mon' }));
     expect(screen.getByText('Training day · default options')).toBeInTheDocument();
     expect(screen.getByText('/ 2315')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'breakfast' } });
+    await choose(screen.getByRole('combobox', { name: 'Add a meal' }), 'Breakfast');
     const picker = await screen.findByRole('dialog', { name: 'Pick a food' });
     fireEvent.click(within(picker).getByText('Oats'));
     // 100 g of oats by default.
@@ -331,9 +337,9 @@ describe('Plan editor rows', () => {
       'GET /plan': overview(),
     });
     renderAt(`/plan/edit/${planDraft.id}`);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Mon' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Mon' }));
     expect(screen.getByLabelText('Amount of Oats')).toHaveValue('40');
-    fireEvent.click(screen.getByRole('tab', { name: 'Tue' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Tue' }));
     expect(screen.getByLabelText('Amount of Oats')).toHaveValue('60');
   });
 });
@@ -415,6 +421,7 @@ describe('Plan generation', () => {
     });
     renderAt('/plan');
     expect(await screen.findByText(/didn't produce a valid plan/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'What still failed' }));
     expect(screen.getByText('Wed: 2,412 kcal vs target 2,200')).toBeInTheDocument();
   });
 });
@@ -429,11 +436,9 @@ describe('Rules', () => {
     renderAt('/rules');
     fireEvent.click(await screen.findByRole('button', { name: /Add/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Type'), {
-      target: { value: 'max_items_per_day' },
-    });
+    await choose(within(dialog).getByRole('combobox', { name: 'Type' }), 'At most N per day');
     fireEvent.change(within(dialog).getByLabelText('Search foods'), { target: { value: 'yog' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Greek yogurt 0%' }));
+    fireEvent.click(within(dialog).getByRole('option', { name: 'Greek yogurt 0%' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'POST' && c.path === '/rules')).toBe(true),

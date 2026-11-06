@@ -1,6 +1,7 @@
 import { CalendarDays, ChartLine, ScanBarcode, Settings, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Link, NavLink, Outlet } from 'react-router';
+import { Toaster } from '@/ui/sonner';
 
 const tabs: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/', label: 'Today', icon: Sun },
@@ -13,11 +14,13 @@ export function Layout() {
   return (
     <div className="mx-auto flex min-h-full max-w-xl flex-col">
       <header className="flex items-center justify-between px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-2">
-        <span className="text-sm font-semibold tracking-wide text-muted uppercase">Diet</span>
+        <span className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+          Diet
+        </span>
         <Link
           to="/settings"
           aria-label="Settings"
-          className="-mr-2 rounded-full p-2 text-muted hover:bg-surface-2 hover:text-text"
+          className="-mr-2 rounded-full p-2 text-muted-foreground hover:bg-surface-2 hover:text-text"
         >
           <Settings size={20} aria-hidden />
         </Link>
@@ -26,6 +29,8 @@ export function Layout() {
       <main className="flex-1 px-4 pb-28">
         <Outlet />
       </main>
+      {/* At the top: the tab bar covers the bottom of the screen. */}
+      <Toaster position="top-center" />
 
       <nav
         aria-label="Main"
@@ -39,7 +44,7 @@ export function Layout() {
                 end={to === '/'}
                 className={({ isActive }) =>
                   `flex flex-col items-center gap-1 py-2.5 text-xs font-medium ${
-                    isActive ? 'text-accent' : 'text-muted hover:text-text'
+                    isActive ? 'text-primary' : 'text-muted-foreground hover:text-text'
                   }`
                 }
               >

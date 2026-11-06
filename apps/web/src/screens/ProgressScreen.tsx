@@ -1,12 +1,28 @@
 import type { MeasurementDto, ProgressDto } from '@diet/shared';
 import { ChartLine, FileUp, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { api, ApiError } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/ui/dropdown-menu';
 import { EmptyState } from '../components/EmptyState';
 import { ImportSheet } from '../components/ImportSheet';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TrendSummary } from '../components/TrendSummary';
-import { Button, Card, ErrorNote, type Option, SectionTitle, Segmented } from '../components/ui';
+import {
+  Button,
+  Card,
+  ErrorNote,
+  type Option,
+  SectionTitle,
+  Segmented,
+  Loading,
+} from '../components/ui';
 import { MiniLine, WeightChart } from '../components/WeightChart';
 import { clockTime, kg, shortDate } from '../format';
 import { useQuery } from '../useQuery';
@@ -33,7 +49,7 @@ export function ProgressScreen() {
         </Button>
       </div>
 
-      {query.status === 'loading' && <p className="text-sm text-muted">Loading…</p>}
+      {query.status === 'loading' && <Loading />}
       {query.status === 'error' && <ErrorNote>{query.error.message}</ErrorNote>}
       {query.data && query.data.measurements.length === 0 && (
         <EmptyState icon={ChartLine} title="No measurements yet">
@@ -88,7 +104,7 @@ function ProgressBody({ data, reload }: { data: ProgressDto; reload: () => Promi
           sinceMs={sinceMs}
           nowMs={nowMs}
         />
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           Filled dots: morning weigh-ins. Hollow: later in the day, counted at half weight. Red
           crosses: left out as outliers.
         </p>
@@ -99,7 +115,7 @@ function ProgressBody({ data, reload }: { data: ProgressDto; reload: () => Promi
         {waist.length > 0 ? (
           <MiniLine data={waist} label="Waist" unit="cm" />
         ) : (
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             No waist measurements yet. Add one in the weekly check-in: it's the honest read on fat
             gain that the scale's body-fat number can't give.
           </p>
@@ -110,7 +126,7 @@ function ProgressBody({ data, reload }: { data: ProgressDto; reload: () => Promi
         <Card className="space-y-3">
           <div>
             <SectionTitle>Body fat and muscle</SectionTitle>
-            <p className="-mt-1 text-xs text-muted">
+            <p className="-mt-1 text-xs text-muted-foreground">
               Bioimpedance estimates: read the direction, not the number.
             </p>
           </div>
@@ -149,10 +165,11 @@ function Readings({
   const newestFirst = [...measurements].reverse();
   const shown = showAll ? newestFirst : newestFirst.slice(0, 10);
 
-  async function act(run: () => Promise<unknown>) {
+  async function act(run: () => Promise<unknown>, done?: string) {
     setError(null);
     try {
       await run();
+      if (done) toast.success(done);
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
@@ -169,9 +186,9 @@ function Readings({
             <div className="min-w-0">
               <p className="text-sm font-medium">
                 {shortDate(m.measuredAt, true)}{' '}
-                <span className="font-normal text-muted">{clockTime(m.measuredAt)}</span>
+                <span className="font-normal text-muted-foreground">{clockTime(m.measuredAt)}</span>
               </p>
-              <p className="flex flex-wrap gap-x-2 text-xs text-muted">
+              <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                 <span>{SOURCE_LABEL[m.source]}</span>
                 {!m.protocolOk && <span>· off-protocol</span>}
                 {outliers.has(m.id) && (
@@ -190,7 +207,7 @@ function Readings({
                 onOverride={(value) =>
                   act(() => api.patch(`/measurements/${m.id}`, { outlierOverride: value }))
                 }
-                onDelete={() => act(() => api.delete(`/measurements/${m.id}`))}
+                onDelete={() => act(() => api.delete(`/measurements/${m.id}`), 'Reading deleted')}
               />
             </div>
           </li>
@@ -216,6 +233,7 @@ function ReadingMenu({
   onOverride: (value: boolean | null) => void;
   onDelete: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const choices: { label: string; run: () => void }[] = [];
   if (measurement.outlierOverride !== null) {
     choices.push({ label: 'Let the trend decide', run: () => onOverride(null) });
@@ -228,40 +246,42 @@ function ReadingMenu({
   }
   choices.push({
     label: 'Delete reading',
-    run: () => {
-      if (
-        window.confirm(`Delete the ${kg(measurement.weightKg, 2)} reading? This can't be undone.`)
-      )
-        onDelete();
-    },
+    run: () => setConfirmDelete(true),
   });
 
   return (
-    <details className="relative">
-      <summary
-        aria-label="Reading options"
-        className="cursor-pointer list-none rounded-full p-2 text-muted hover:bg-surface-2 [&::-webkit-details-marker]:hidden"
-      >
-        <MoreHorizontal size={18} aria-hidden />
-      </summary>
-      <ul className="absolute right-0 z-10 mt-1 w-52 rounded-xl border border-border bg-surface py-1 shadow-lg">
-        {choices.map((c) => (
-          <li key={c.label}>
-            <button
-              type="button"
-              onClick={(e) => {
-                (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
-                c.run();
-              }}
-              className={`w-full px-3 py-2 text-left text-sm hover:bg-surface-2 ${
-                c.label.startsWith('Delete') ? 'text-danger' : ''
-              }`}
+    <>
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete the ${kg(measurement.weightKg, 2)} reading?`}
+        description="It's removed from your weight trend. This can't be undone."
+        confirmLabel="Delete reading"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete();
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
+      {/* Not modal: a dialog opened from a modal menu can leave the page unclickable. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger
+          aria-label="Reading options"
+          className="rounded-full p-2 text-muted-foreground hover:bg-surface-2"
+        >
+          <MoreHorizontal size={18} aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          {choices.map((c) => (
+            <DropdownMenuItem
+              key={c.label}
+              variant={c.label.startsWith('Delete') ? 'destructive' : 'default'}
+              onSelect={c.run}
             >
               {c.label}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </details>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

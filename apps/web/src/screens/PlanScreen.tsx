@@ -15,7 +15,7 @@ import { api, ApiError } from '../api';
 import { EmptyState } from '../components/EmptyState';
 import { GenerateCard } from '../components/GenerateCard';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, SectionTitle } from '../components/ui';
+import { Button, Card, ErrorNote, SectionTitle, Disclosure, Loading } from '../components/ui';
 import { shortDate } from '../format';
 import { useQuery } from '../useQuery';
 
@@ -36,20 +36,20 @@ export function PlanScreen() {
       <div className="flex items-start justify-between">
         <ScreenHeader title="Plan">Phase, targets, reviews and the week.</ScreenHeader>
         <div className="mt-1 flex gap-3">
-          <Link to="/foods" className="flex items-center gap-1 text-sm font-medium text-accent">
+          <Link to="/foods" className="flex items-center gap-1 text-sm font-medium text-primary">
             <Apple size={16} aria-hidden /> Foods
           </Link>
-          <Link to="/rules" className="flex items-center gap-1 text-sm font-medium text-accent">
+          <Link to="/rules" className="flex items-center gap-1 text-sm font-medium text-primary">
             <ListChecks size={16} aria-hidden /> Rules
           </Link>
         </div>
       </div>
-      {overview.status === 'loading' && <p className="text-sm text-muted">Loading…</p>}
+      {overview.status === 'loading' && <Loading />}
       {overview.status === 'error' && <ErrorNote>{overview.error.message}</ErrorNote>}
       {overview.data && !overview.data.phase && (
         <EmptyState icon={CalendarDays} title="No phase yet">
           A phase sets the direction (surplus, maintenance or cut) and the targets that go with it.{' '}
-          <Link to="/plan/phase" className="font-semibold text-accent">
+          <Link to="/plan/phase" className="font-semibold text-primary">
             Start a phase
           </Link>
         </EmptyState>
@@ -72,7 +72,7 @@ function Overview({ data, reload }: { data: PlanOverviewDto; reload: () => Promi
           <div>
             <SectionTitle>Phase</SectionTitle>
             <p className="text-xl font-bold tracking-tight">{PHASE_LABEL[phase.type]}</p>
-            <p className="text-sm text-muted">
+            <p className="text-sm text-muted-foreground">
               Since {shortDate(phase.startedOn, true)}
               {phase.rateBandKgPerWeek &&
                 ` · aiming for ${phase.rateBandKgPerWeek[0].toFixed(2)}–${phase.rateBandKgPerWeek[1].toFixed(2)} kg/wk`}
@@ -80,7 +80,7 @@ function Overview({ data, reload }: { data: PlanOverviewDto; reload: () => Promi
                 ` · holding ${phase.targetWeightKg} ± ${phase.holdBandKg} kg`}
             </p>
           </div>
-          <Link to="/plan/phase" className="text-sm font-medium text-accent">
+          <Link to="/plan/phase" className="text-sm font-medium text-primary">
             Change
           </Link>
         </div>
@@ -113,7 +113,7 @@ function TargetsTable({ training, rest }: { training: DayTargetsDto; rest: DayTa
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-xs text-muted">
+        <tr className="text-xs text-muted-foreground">
           <th className="py-1 text-left font-medium" />
           <th className="py-1 text-right font-medium">Training</th>
           <th className="py-1 text-right font-medium">Rest</th>
@@ -147,14 +147,14 @@ function TargetsCard({
     <Card className="space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionTitle>Targets</SectionTitle>
-        <span className="text-xs text-muted">
+        <span className="text-xs text-muted-foreground">
           v{targets.version} · from {shortDate(targets.effectiveFrom)}
         </span>
       </div>
       <TargetsTable training={targets.training} rest={targets.rest} />
-      {targets.reasoning && <p className="text-xs text-muted">{targets.reasoning}</p>}
+      {targets.reasoning && <p className="text-xs text-muted-foreground">{targets.reasoning}</p>}
       {maintenance && (
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           Maintenance estimate: {maintenance.kcal} kcal ({shortDate(maintenance.asOf, true)}). For
           reference only: targets move through reviews.
         </p>
@@ -191,19 +191,23 @@ function ReviewCard({ data, onRan }: { data: PlanOverviewDto; onRan: () => Promi
       <div className="flex items-baseline justify-between">
         <SectionTitle>Review</SectionTitle>
         {data.nextReviewOn && (
-          <span className="text-xs text-muted">Next: {shortDate(data.nextReviewOn, true)}</span>
+          <span className="text-xs text-muted-foreground">
+            Next: {shortDate(data.nextReviewOn, true)}
+          </span>
         )}
       </div>
       {data.lastReview ? (
         <div>
           <p className="text-sm font-semibold">
             {OUTCOME_LABEL[data.lastReview.outcome]}{' '}
-            <span className="font-normal text-muted">· {shortDate(data.lastReview.ranOn)}</span>
+            <span className="font-normal text-muted-foreground">
+              · {shortDate(data.lastReview.ranOn)}
+            </span>
           </p>
-          <p className="text-sm text-muted">{data.lastReview.explanation}</p>
+          <p className="text-sm text-muted-foreground">{data.lastReview.explanation}</p>
         </div>
       ) : (
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           No review yet. It runs by itself on the date above; you can also run it now. It only
           proposes a change when the trend and two check-ins back it up.
         </p>
@@ -245,11 +249,11 @@ function ProposalCard({
   return (
     <section
       aria-labelledby="proposal-heading"
-      className="rounded-2xl border-2 border-accent bg-surface p-4"
+      className="rounded-2xl border-2 border-primary bg-surface p-4"
     >
       <h2
         id="proposal-heading"
-        className="text-xs font-semibold tracking-wide text-accent uppercase"
+        className="text-xs font-semibold tracking-wide text-primary uppercase"
       >
         {proposal.kind === 'diet_break' ? 'Proposal: diet break' : 'Proposal: new targets'}
       </h2>
@@ -261,12 +265,15 @@ function ProposalCard({
         </p>
       )}
       {proposal.targets && current && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-sm text-muted">New targets</summary>
+        <Disclosure
+          className="mt-2"
+          summaryClassName="text-sm text-muted-foreground"
+          summary="New targets"
+        >
           <div className="mt-2">
             <TargetsTable training={proposal.targets.training} rest={proposal.targets.rest} />
           </div>
-        </details>
+        </Disclosure>
       )}
       {error && (
         <div className="mt-2">
@@ -311,7 +318,7 @@ function WeekCard({
     return (
       <Card className="space-y-2">
         <SectionTitle>The week</SectionTitle>
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           No active meal plan. Add your foods first (Foods, top right), then build the week; totals
           check against the targets as you go.
         </p>
@@ -328,7 +335,7 @@ function WeekCard({
         <SectionTitle>{plan.name}</SectionTitle>
         <Link
           to={`/plan/edit/${plan.id}`}
-          className="flex items-center gap-1 text-sm font-medium text-accent"
+          className="flex items-center gap-1 text-sm font-medium text-primary"
         >
           <Pencil size={14} aria-hidden /> Edit
         </Link>
@@ -343,18 +350,23 @@ function WeekCard({
             <li key={day.weekday} className="flex items-center justify-between py-2">
               <span className="text-sm">
                 <span className="inline-block w-9 font-semibold">{WEEKDAY[day.weekday - 1]}</span>
-                <span className="text-xs text-muted">{training ? 'Training' : 'Rest'}</span>
+                <span className="text-xs text-muted-foreground">
+                  {training ? 'Training' : 'Rest'}
+                </span>
               </span>
               <span className="text-right text-sm">
                 {day.meals.length === 0 ? (
-                  <span className="text-muted">empty</span>
+                  <span className="text-muted-foreground">empty</span>
                 ) : (
                   <>
                     <span className="font-medium">{Math.round(totals.kcal)} kcal</span>
-                    <span className="text-muted"> · P {Math.round(totals.proteinG)}</span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · P {Math.round(totals.proteinG)}
+                    </span>
                     {off !== null && Math.abs(off) > 50 && (
                       <span
-                        className={`block text-xs ${Math.abs(off) > 150 ? 'text-warn' : 'text-muted'}`}
+                        className={`block text-xs ${Math.abs(off) > 150 ? 'text-warn' : 'text-muted-foreground'}`}
                       >
                         {off > 0 ? '+' : '−'}
                         {Math.abs(off)} vs target
@@ -385,9 +397,12 @@ function Drafts() {
           >
             <span>
               <span className="font-medium">{d.name}</span>
-              <span className="text-muted"> · draft, edited {shortDate(d.updatedAt)}</span>
+              <span className="text-muted-foreground">
+                {' '}
+                · draft, edited {shortDate(d.updatedAt)}
+              </span>
             </span>
-            <span className="text-accent">Continue</span>
+            <span className="text-primary">Continue</span>
           </Link>
         </li>
       ))}
