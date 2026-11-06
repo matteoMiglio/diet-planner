@@ -9,9 +9,21 @@ import type {
 import { fitScore, nutriScore, qualityScore, SLOT_LABEL } from '@diet/shared';
 import { Camera, Check, Plus, ScanBarcode, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { Input } from '@/ui/input';
 import { api, ApiError } from '../api';
+import { Badge } from '@/ui/badge';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, NumberField, parseDecimal, SectionTitle } from '../components/ui';
+import {
+  Button,
+  Card,
+  ErrorNote,
+  NumberField,
+  parseDecimal,
+  SectionTitle,
+  OptionSelect,
+  Disclosure,
+} from '../components/ui';
 import { shrinkPhoto } from '../image';
 
 type Stage =
@@ -73,7 +85,7 @@ export function ScanScreen() {
           <CameraScanner onCode={onCode} onCancel={restart} onError={cameraFailed} />
         )}
         {stage.kind === 'looking' && (
-          <p className="text-sm text-muted" role="status">
+          <p className="text-sm text-muted-foreground" role="status">
             Looking up {stage.code}…
           </p>
         )}
@@ -132,7 +144,7 @@ function Start({
       <button
         type="button"
         onClick={onCamera}
-        className="flex w-full flex-col items-center gap-3 rounded-3xl bg-accent px-6 py-10 text-bg transition hover:opacity-90"
+        className="flex w-full flex-col items-center gap-3 rounded-3xl bg-primary px-6 py-10 text-bg transition hover:opacity-90"
       >
         <ScanBarcode size={48} aria-hidden />
         <span className="text-lg font-bold">Scan a barcode</span>
@@ -149,32 +161,36 @@ function Start({
           <label className="sr-only" htmlFor="barcode-input">
             Barcode number
           </label>
-          <input
+          <Input
             id="barcode-input"
             inputMode="numeric"
             placeholder="Or type the barcode number"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            className="min-h-11 flex-1 rounded-xl border border-border bg-bg px-3 text-base"
+            className="flex-1 h-11"
           />
           <Button type="submit" variant="secondary" disabled={code.length < 8}>
             Look up
           </Button>
         </form>
         <div>
-          <label className="flex items-center gap-2 rounded-xl border border-border px-3">
-            <Search size={16} className="text-muted" aria-hidden />
-            <span className="sr-only">Search your foods</span>
-            <input
+          <div className="relative">
+            <Search
+              size={16}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              aria-label="Search your foods"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);
                 if (e.target.value.trim().length < 2) setResults([]);
               }}
               placeholder="Or search your foods (fresh food, no barcode)"
-              className="min-h-11 flex-1 bg-transparent text-base outline-none"
+              className="h-11 pl-9"
             />
-          </label>
+          </div>
           {results.length > 0 && (
             <ul className="mt-1 divide-y divide-border">
               {results.map((f) => (
@@ -185,7 +201,7 @@ function Start({
                     className="flex w-full justify-between px-1 py-2.5 text-left text-sm hover:bg-surface-2"
                   >
                     <span className="truncate">{f.name}</span>
-                    <span className="shrink-0 text-xs text-muted">
+                    <span className="shrink-0 text-xs text-muted-foreground">
                       {Math.round(f.kcal)} kcal/100 g
                     </span>
                   </button>
@@ -290,7 +306,9 @@ function CameraScanner({
           aria-hidden
         />
       </div>
-      <p className="text-center text-sm text-muted">Hold the barcode inside the frame.</p>
+      <p className="text-center text-sm text-muted-foreground">
+        Hold the barcode inside the frame.
+      </p>
       <Button variant="secondary" className="w-full" onClick={onCancel}>
         Cancel
       </Button>
@@ -298,11 +316,18 @@ function CameraScanner({
   );
 }
 
-const BAND: Record<'good' | 'ok' | 'poor' | 'avoid', { label: string; className: string }> = {
-  good: { label: 'Good', className: 'bg-accent text-bg' },
-  ok: { label: 'OK', className: 'bg-accent-soft text-accent' },
-  poor: { label: 'Poor', className: 'bg-surface-2 text-warn' },
-  avoid: { label: 'Avoid', className: 'bg-surface-2 text-danger' },
+const BAND: Record<
+  'good' | 'ok' | 'poor' | 'avoid',
+  {
+    label: string;
+    variant: 'default' | 'secondary' | 'outline' | 'destructive';
+    className?: string;
+  }
+> = {
+  good: { label: 'Good', variant: 'default' },
+  ok: { label: 'OK', variant: 'secondary' },
+  poor: { label: 'Poor', variant: 'outline', className: 'text-warn' },
+  avoid: { label: 'Avoid', variant: 'destructive' },
 };
 
 function ScoreCard({
@@ -325,11 +350,9 @@ function ScoreCard({
         <span className="flex items-center gap-2">
           <span className="text-2xl font-bold">{score ?? '–'}</span>
           {band && (
-            <span
-              className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${BAND[band].className}`}
-            >
+            <Badge variant={BAND[band].variant} className={BAND[band].className}>
               {BAND[band].label}
-            </span>
+            </Badge>
           )}
         </span>
       </div>
@@ -340,8 +363,7 @@ function ScoreCard({
           ))}
         </ul>
       )}
-      <details className="text-xs text-muted">
-        <summary className="cursor-pointer">How it's scored</summary>
+      <Disclosure className="text-xs text-muted-foreground" summary="How it's scored">
         <ul className="mt-1 space-y-1">
           {parts.map((p) => (
             <li key={p.key} className="flex justify-between gap-3">
@@ -354,7 +376,7 @@ function ScoreCard({
             </li>
           ))}
         </ul>
-      </details>
+      </Disclosure>
     </Card>
   );
 }
@@ -375,7 +397,7 @@ function ProductResult({
   const [amount, setAmount] = useState(unit === 'g' ? '100' : '1');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [logged, setLogged] = useState<string | null>(null);
+  const [logged, setLogged] = useState(false);
   const [pooled, setPooled] = useState(food.pool.inPool);
 
   const qty = parseDecimal(amount);
@@ -414,7 +436,8 @@ function ProductResult({
     setError(null);
     try {
       await api.post('/food-log', { foodId: food.id, grams, slot: context.slot, via });
-      setLogged(`Logged ${Math.round(grams)} g at ${SLOT_LABEL[context.slot].toLowerCase()}.`);
+      setLogged(true);
+      toast.success(`Logged ${Math.round(grams)} g at ${SLOT_LABEL[context.slot].toLowerCase()}.`);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -440,6 +463,7 @@ function ProductResult({
         },
       });
       setPooled(true);
+      toast.success('Added to your planning pool');
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -451,7 +475,7 @@ function ProductResult({
     <div className="space-y-3">
       <div>
         <h2 className="text-xl font-bold tracking-tight">{food.name}</h2>
-        {food.brand && <p className="text-sm text-muted">{food.brand}</p>}
+        {food.brand && <p className="text-sm text-muted-foreground">{food.brand}</p>}
       </div>
 
       <ScoreCard
@@ -471,7 +495,7 @@ function ProductResult({
       <Card>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-xs text-muted">
+            <tr className="text-xs text-muted-foreground">
               <th className="text-left font-medium" />
               <th className="text-right font-medium">100 g</th>
               <th className="text-right font-medium">{Math.round(portionG)} g</th>
@@ -508,34 +532,30 @@ function ProductResult({
           <label className="sr-only" htmlFor="ate-amount">
             Amount
           </label>
-          <input
+          <Input
             id="ate-amount"
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="min-h-11 w-24 rounded-xl border border-border bg-bg px-3 text-right text-base"
+            className="w-24 text-right h-11"
           />
-          <select
-            aria-label="Unit"
+          <OptionSelect
+            label="Unit"
             value={unit}
-            onChange={(e) => {
-              setUnit(e.target.value);
-              setAmount(e.target.value === 'g' ? String(Math.round(portionG)) : '1');
+            options={[
+              { value: 'g', label: 'g' },
+              ...units.map(([u, g]) => ({ value: u, label: `${u} (${g} g)` })),
+            ]}
+            onChange={(next) => {
+              setUnit(next);
+              setAmount(next === 'g' ? String(Math.round(portionG)) : '1');
             }}
-            className="min-h-11 rounded-xl border border-border bg-bg px-2 text-base"
-          >
-            <option value="g">g</option>
-            {units.map(([u, g]) => (
-              <option key={u} value={u}>
-                {u} ({g} g)
-              </option>
-            ))}
-          </select>
-          <Button className="flex-1" disabled={busy || !!logged} onClick={() => void ate()}>
+            className="min-h-11"
+          />
+          <Button className="flex-1" disabled={busy || logged} onClick={() => void ate()}>
             <Check size={18} aria-hidden /> {logged ? 'Logged' : 'Ate it'}
           </Button>
         </div>
-        {logged && <p className="text-sm text-accent">{logged}</p>}
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex gap-2">
           {!pooled && (
@@ -649,7 +669,7 @@ function LabelCapture({
       <div className="flex items-start justify-between">
         <div>
           <SectionTitle>Not in Open Food Facts</SectionTitle>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             {reason ?? `No product with barcode ${code}.`} Take a photo of the nutrition label and
             it gets read for you; check the numbers before saving.
           </p>
@@ -658,7 +678,7 @@ function LabelCapture({
           type="button"
           onClick={onCancel}
           aria-label="Cancel"
-          className="rounded-full p-2 text-muted hover:bg-surface-2"
+          className="rounded-full p-2 text-muted-foreground hover:bg-surface-2"
         >
           <X size={18} aria-hidden />
         </button>
@@ -693,7 +713,7 @@ function LabelCapture({
           }}
         >
           {notes.length > 0 && (
-            <ul className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+            <ul className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
               {notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
@@ -701,21 +721,15 @@ function LabelCapture({
           )}
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm">Name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="min-h-10 w-56 rounded-xl border border-border bg-bg px-3 text-base"
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} className="w-56 h-11" />
           </label>
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm">Brand</span>
-            <input
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
-              className="min-h-10 w-56 rounded-xl border border-border bg-bg px-3 text-base"
-            />
+            <Input value={brand} onChange={(e) => setBrand(e.target.value)} className="w-56 h-11" />
           </label>
-          <p className="pt-1 text-xs font-semibold tracking-wide text-muted uppercase">Per 100 g</p>
+          <p className="pt-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Per 100 g
+          </p>
           {FIELDS.map(([key, label, unit]) => (
             <NumberField
               key={key}

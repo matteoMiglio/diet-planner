@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 /* Design tokens. Light by default, dark follows the system. */
 :root {
@@ -6,12 +7,36 @@
   --surface: #ffffff;
   --surface-2: #eeede7;
   --text: #1b1d1a;
-  --muted: #6b6f68;
+  --muted-foreground: #6b6f68;
   --border: #e2e0d8;
-  --accent: #2f6b4f;
-  --accent-soft: #dcefe3;
+  --primary: #2f6b4f;
+  --primary-soft: #dcefe3;
   --warn: #a55a12;
   --danger: #b3261e;
+}
+
+/*
+ * shadcn/ui's token names, mapped onto the palette above so the components in src/ui stay as
+ * generated. In shadcn, `primary` is the brand colour and `accent` a subtle hover background.
+ * `muted` is a subtle background and `muted-foreground` the secondary (grey) text.
+ */
+:root {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary-foreground: var(--bg);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-2);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--text);
+  --destructive: var(--danger);
+  --input: var(--border);
+  --ring: var(--primary);
+  --radius: 0.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,10 +45,10 @@
     --surface: #1b1e1b;
     --surface-2: #242824;
     --text: #ecede8;
-    --muted: #9da39a;
+    --muted-foreground: #9da39a;
     --border: #2e332e;
-    --accent: #7cc59b;
-    --accent-soft: #1f3a2b;
+    --primary: #7cc59b;
+    --primary-soft: #1f3a2b;
     --warn: #e0a15c;
     --danger: #f2827a;
   }
@@ -36,12 +61,34 @@
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
   --color-warn: var(--warn);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-danger: var(--danger);
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+}
+
+/* shadcn's base layer: a bare `border` uses the border token, focus outlines the ring. */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 }
 
 html,

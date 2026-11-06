@@ -3,6 +3,7 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
+    "paths": { "@/*": ["./src/*"] },
     "types": ["vite/client", "vite-plugin-pwa/client", "@testing-library/jest-dom/vitest"]
   },
   "include": ["src", "*.ts"],

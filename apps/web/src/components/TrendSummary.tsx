@@ -7,15 +7,17 @@ export function TrendSummary({ trend }: { trend: TrendDto }) {
     trend.slopeKgPerWeek !== null ? (
       <span className="text-2xl font-bold tracking-tight">{kgPerWeek(trend.slopeKgPerWeek)}</span>
     ) : (
-      <span className="text-2xl font-bold tracking-tight text-muted">—</span>
+      <span className="text-2xl font-bold tracking-tight text-muted-foreground">—</span>
     );
 
   if (trend.decidable && trend.ci80) {
     return (
       <div>
-        <p className="text-xs font-semibold tracking-wide text-muted uppercase">Weight trend</p>
+        <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Weight trend
+        </p>
         <p className="mt-1">{rate}</p>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-1 text-sm text-muted-foreground">
           Likely between {kgPerWeek(trend.ci80[0])} and {kgPerWeek(trend.ci80[1])} (80%), from{' '}
           {trend.n} weigh-ins over {Math.round(trend.spanDays)} days.
         </p>
@@ -39,11 +41,11 @@ export function TrendSummary({ trend }: { trend: TrendDto }) {
 
   return (
     <div>
-      <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         Weight trend · not reliable yet
       </p>
       <p className="mt-1">{rate}</p>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 text-sm text-muted-foreground">
         {trend.slopeKgPerWeek !== null ? 'A rough estimate only. ' : ''}
         To trust it, the trend needs {joinList(fixes)}.
       </p>

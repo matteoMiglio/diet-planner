@@ -8,6 +8,8 @@ import type {
 import { phaseTargets } from '@diet/shared';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { Input } from '@/ui/input';
+import { Textarea } from '@/ui/textarea';
 import { api, ApiError } from '../api';
 import { ScreenHeader } from '../components/ScreenHeader';
 import {
@@ -19,6 +21,7 @@ import {
   parseDecimal,
   SectionTitle,
   Segmented,
+  Loading,
 } from '../components/ui';
 import { useQuery } from '../useQuery';
 import { PHASE_LABEL } from './PlanScreen';
@@ -42,7 +45,7 @@ export function PhaseSetupScreen() {
   const overview = useQuery<PlanOverviewDto>('/plan');
   const progress = useQuery<ProgressDto>('/progress');
   if (overview.status === 'loading' || progress.status === 'loading') {
-    return <p className="text-sm text-muted">Loading…</p>;
+    return <Loading />;
   }
   const weight =
     progress.data?.trend.interceptKg ?? progress.data?.measurements.at(-1)?.weightKg ?? null;
@@ -161,14 +164,14 @@ function PhaseForm({
       >
         <Card className="space-y-3">
           <Segmented label="Phase" options={TYPES} value={type} onChange={(v) => v && setType(v)} />
-          <p className="text-sm text-muted">{HELP[type]}</p>
+          <p className="text-sm text-muted-foreground">{HELP[type]}</p>
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm">Starts on</span>
-            <input
+            <Input
               type="date"
               value={startedOn}
               onChange={(e) => setStartedOn(e.target.value)}
-              className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
+              className="h-11 w-auto"
             />
           </label>
           <NumberField
@@ -177,7 +180,7 @@ function PhaseForm({
             value={maintenance}
             onChange={setMaintenance}
           />
-          <p className="-mt-2 text-xs text-muted">
+          <p className="-mt-2 text-xs text-muted-foreground">
             Use the maintenance you've observed (the weight held steady at this intake), not a
             formula.
           </p>
@@ -209,11 +212,11 @@ function PhaseForm({
           />
           <label className="block">
             <span className="text-sm">Why this phase (optional)</span>
-            <textarea
+            <Textarea
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-base"
+              className="mt-1 w-full"
             />
           </label>
         </Card>
@@ -225,19 +228,21 @@ function PhaseForm({
               <button
                 type="button"
                 onClick={startByHand}
-                className="text-sm font-medium text-accent"
+                className="text-sm font-medium text-primary"
               >
                 Set by hand
               </button>
             )}
           </div>
           {!byHand && !preview && (
-            <p className="text-sm text-muted">Enter maintenance and bodyweight to see them.</p>
+            <p className="text-sm text-muted-foreground">
+              Enter maintenance and bodyweight to see them.
+            </p>
           )}
           {!byHand && preview && (
             <>
               <PreviewTable training={preview.targets.training} rest={preview.targets.rest} />
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted-foreground">
                 {trainingDays} training days a week, averaging {Math.round(preview.averageKcal)}{' '}
                 kcal. {preview.notes.join(' ')}
               </p>
@@ -274,7 +279,7 @@ function PreviewTable({ training, rest }: { training: DayTargetsDto; rest: DayTa
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-xs text-muted">
+        <tr className="text-xs text-muted-foreground">
           <th className="text-left font-medium" />
           <th className="text-right font-medium">Training</th>
           <th className="text-right font-medium">Rest</th>
@@ -307,7 +312,7 @@ function ManualTargets({
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-xs text-muted">
+        <tr className="text-xs text-muted-foreground">
           <th className="text-left font-medium" />
           <th className="text-right font-medium">Training</th>
           <th className="text-right font-medium">Rest</th>
@@ -317,18 +322,18 @@ function ManualTargets({
         {ROWS.map(([label, key, unit]) => (
           <tr key={key}>
             <td className="py-1">
-              {label} <span className="text-xs text-muted">({unit})</span>
+              {label} <span className="text-xs text-muted-foreground">({unit})</span>
             </td>
             {(['training', 'rest'] as const).map((day) => (
               <td key={day} className="py-1 text-right">
-                <input
+                <Input
                   aria-label={`${label} on ${day} days`}
                   inputMode="decimal"
                   value={value[day][key]}
                   onChange={(e) =>
                     onChange({ ...value, [day]: { ...value[day], [key]: e.target.value } })
                   }
-                  className="w-20 rounded-lg border border-border bg-bg px-2 py-1.5 text-right text-base"
+                  className="w-20 text-right h-11"
                 />
               </td>
             ))}

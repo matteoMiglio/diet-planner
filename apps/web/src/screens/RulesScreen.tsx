@@ -2,9 +2,25 @@ import type { FoodDto, Role, RuleDto, RuleKind, RuleSpec, Slot } from '@diet/sha
 import { ROLE_LABEL, ROLES, RULE_KIND_LABEL, SLOT_LABEL, SLOTS } from '@diet/shared';
 import { Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { Textarea } from '@/ui/textarea';
 import { api, ApiError } from '../api';
+import { Switch } from '@/ui/switch';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, NumberField, parseDecimal, Segmented } from '../components/ui';
+import { Badge } from '@/ui/badge';
+import { Command, CommandInput, CommandItem, CommandList } from '@/ui/command';
+import { BottomSheet } from '../components/BottomSheet';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import {
+  Button,
+  Card,
+  ErrorNote,
+  NumberField,
+  parseDecimal,
+  Segmented,
+  OptionSelect,
+  MultiToggle,
+} from '../components/ui';
 import { useQuery } from '../useQuery';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -41,7 +57,7 @@ export function RulesScreen() {
       {rules.status === 'error' && <ErrorNote>{rules.error.message}</ErrorNote>}
       {error && <ErrorNote>{error}</ErrorNote>}
       {rules.data && rules.data.length === 0 && (
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           No rules yet. Add the ones from your Diet Planning Rules note: yogurt at most twice a day,
           no potatoes on training days, and so on.
         </p>
@@ -51,22 +67,25 @@ export function RulesScreen() {
           <ul className="divide-y divide-border">
             {rules.data.map((r) => (
               <li key={r.id} className="flex items-start gap-3 px-4 py-3">
-                <input
-                  type="checkbox"
+                <Switch
                   checked={r.active}
-                  onChange={() => void toggle(r)}
+                  onCheckedChange={() => void toggle(r)}
                   aria-label={`Rule active: ${r.text}`}
-                  className="mt-1 size-5 shrink-0 accent-[var(--accent)]"
+                  className="mt-0.5"
                 />
                 <button
                   type="button"
                   onClick={() => setEditing(r)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <span className={`block text-sm ${r.active ? '' : 'text-muted line-through'}`}>
+                  <span
+                    className={`block text-sm ${r.active ? '' : 'text-muted-foreground line-through'}`}
+                  >
                     {r.text}
                   </span>
-                  <span className="block text-xs text-muted">{RULE_KIND_LABEL[r.spec.kind]}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {RULE_KIND_LABEL[r.spec.kind]}
+                  </span>
                 </button>
               </li>
             ))}
@@ -154,6 +173,7 @@ function RuleSheet({
   const [text, setText] = useState(rule?.text ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const nameOf = new Map(foods.map((f) => [f.id, f.name]));
   const names = (ids: string[]) => ids.map((id) => nameOf.get(id) ?? '?').join(', ');
   const set = (patch: Partial<RuleSpec>) => setSpec({ ...spec, ...patch } as RuleSpec);
@@ -170,6 +190,7 @@ function RuleSheet({
       const body = { spec, text: finalText, active: rule?.active ?? true };
       if (rule) await api.put(`/rules/${rule.id}`, body);
       else await api.post('/rules', body);
+      toast.success(rule ? 'Rule saved' : 'Rule added');
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
@@ -178,10 +199,12 @@ function RuleSheet({
   }
 
   async function remove() {
-    if (!rule || !window.confirm('Delete this rule?')) return;
+    if (!rule) return;
+    setConfirmDelete(false);
     setBusy(true);
     try {
       await api.delete(`/rules/${rule.id}`);
+      toast.success('Rule deleted');
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
@@ -190,47 +213,23 @@ function RuleSheet({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-20 flex items-end justify-center bg-black/40"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="rule-title"
-    >
+    <BottomSheet title={rule ? 'Edit rule' : 'New rule'} onClose={onClose}>
       <form
-        className="max-h-[90vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-3xl bg-surface p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]"
+        className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <div className="flex items-center justify-between">
-          <h2 id="rule-title" className="text-lg font-bold">
-            {rule ? 'Edit rule' : 'New rule'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-2 text-muted hover:bg-surface-2"
-          >
-            <X size={20} aria-hidden />
-          </button>
-        </div>
-
-        <label className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <span className="text-sm">Type</span>
-          <select
+          <OptionSelect
+            label="Type"
             value={spec.kind}
-            onChange={(e) => setSpec(blankSpec(e.target.value as RuleKind))}
-            className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
-          >
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {RULE_KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>
+            options={KINDS.map((k) => ({ value: k, label: RULE_KIND_LABEL[k] }))}
+            onChange={(k) => setSpec(blankSpec(k))}
+          />
+        </div>
 
         {'foodIds' in spec && (
           <FoodPicker
@@ -325,13 +324,13 @@ function RuleSheet({
           <span className="text-sm">
             {spec.kind === 'guidance' ? 'Guidance' : 'In words (optional)'}
           </span>
-          <textarea
+          <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
             maxLength={500}
             placeholder={describe(spec, names)}
-            className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-base"
+            className="mt-1 w-full"
           />
         </label>
 
@@ -341,13 +340,21 @@ function RuleSheet({
             {busy ? 'Saving…' : 'Save'}
           </Button>
           {rule && (
-            <Button variant="danger" disabled={busy} onClick={() => void remove()}>
+            <Button variant="danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
               <Trash2 size={16} aria-hidden /> Delete
             </Button>
           )}
         </div>
       </form>
-    </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this rule?"
+        description="The planner stops following it. This can't be undone."
+        confirmLabel="Delete rule"
+        onConfirm={() => void remove()}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </BottomSheet>
   );
 }
 
@@ -377,44 +384,46 @@ function FoodPicker({
       <p className="mb-1 text-sm">{label}</p>
       <div className="mb-2 flex flex-wrap gap-1">
         {chosen.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => onChange(value.filter((id) => id !== f.id))}
-            className="flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent"
-            aria-label={`Remove ${f.name}`}
-          >
-            {f.name} <X size={12} aria-hidden />
-          </button>
+          <Badge key={f.id} variant="secondary" asChild>
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((id) => id !== f.id))}
+              aria-label={`Remove ${f.name}`}
+            >
+              {f.name} <X aria-hidden />
+            </button>
+          </Badge>
         ))}
       </div>
       {(!single || chosen.length === 0) && (
         <>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search foods"
-            aria-label={`Search ${label.toLowerCase()}`}
-            className="min-h-10 w-full rounded-xl border border-border bg-bg px-3 text-base"
-          />
-          {matches.length > 0 && (
-            <ul className="mt-1 rounded-xl border border-border">
-              {matches.map((f) => (
-                <li key={f.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
+          {/* Our own matching (name contains the text, chosen foods left out), so no cmdk filter. */}
+          <Command shouldFilter={false} className="rounded-lg border">
+            <CommandInput
+              // 16 px: iOS Safari zooms into inputs with smaller text.
+              className="text-base"
+              value={q}
+              onValueChange={setQ}
+              placeholder="Search foods"
+              aria-label={`Search ${label.toLowerCase()}`}
+            />
+            {matches.length > 0 && (
+              <CommandList>
+                {matches.map((f) => (
+                  <CommandItem
+                    key={f.id}
+                    value={f.id}
+                    onSelect={() => {
                       onChange(single ? [f.id] : [...value, f.id]);
                       setQ('');
                     }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-surface-2"
                   >
                     {f.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                  </CommandItem>
+                ))}
+              </CommandList>
+            )}
+          </Command>
         </>
       )}
     </div>
@@ -435,43 +444,26 @@ function Toggles<T extends string | number>({
   return (
     <div>
       <p className="mb-1 text-sm">{label}</p>
-      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
-        {options.map((o) => {
-          const on = value.includes(o.value);
-          return (
-            <button
-              key={String(o.value)}
-              type="button"
-              aria-pressed={on}
-              onClick={() =>
-                onChange(on ? value.filter((v) => v !== o.value) : [...value, o.value])
-              }
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${on ? 'bg-accent text-bg' : 'bg-surface-2 text-muted'}`}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
+      <MultiToggle
+        label={label}
+        options={options}
+        value={value}
+        onToggle={(v) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])}
+      />
     </div>
   );
 }
 
 function SlotSelect({ value, onChange }: { value: Slot; onChange: (s: Slot) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-3">
       <span className="text-sm">Meal</span>
-      <select
+      <OptionSelect
+        label="Meal"
         value={value}
-        onChange={(e) => onChange(e.target.value as Slot)}
-        className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
-      >
-        {SLOTS.map((s) => (
-          <option key={s} value={s}>
-            {SLOT_LABEL[s]}
-          </option>
-        ))}
-      </select>
-    </label>
+        options={SLOTS.map((s) => ({ value: s, label: SLOT_LABEL[s] }))}
+        onChange={onChange}
+      />
+    </div>
   );
 }

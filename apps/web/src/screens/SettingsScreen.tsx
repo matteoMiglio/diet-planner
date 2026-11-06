@@ -1,9 +1,11 @@
 import type { ProfileDto, SettingsDto } from '@diet/shared';
 import { Bell, BellOff, Copy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Input } from '@/ui/input';
 import { api, ApiError } from '../api';
+import { Switch } from '@/ui/switch';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, SectionTitle } from '../components/ui';
+import { Button, Card, ErrorNote, SectionTitle, MultiToggle } from '../components/ui';
 import { currentSubscription, disablePush, enablePush, pushSupport } from '../push';
 import { useHealth } from '../useHealth';
 import { useQuery } from '../useQuery';
@@ -71,19 +73,23 @@ function Notifications({
   let body;
   if (!publicKey) {
     body = (
-      <p className="text-sm text-muted">
+      <p className="text-sm text-muted-foreground">
         Push isn't configured on the server (VAPID keys in .env).
       </p>
     );
   } else if (support === 'needs_install') {
     body = (
-      <p className="text-sm text-muted">
+      <p className="text-sm text-muted-foreground">
         On iPhone, notifications only work from the installed app: Share → Add to Home Screen, then
         open it from there.
       </p>
     );
   } else if (support === 'unsupported') {
-    body = <p className="text-sm text-muted">This browser doesn't support push notifications.</p>;
+    body = (
+      <p className="text-sm text-muted-foreground">
+        This browser doesn't support push notifications.
+      </p>
+    );
   } else if (subscribed) {
     body = (
       <div className="flex flex-wrap gap-2">
@@ -139,9 +145,9 @@ function Notifications({
           (message.error ? (
             <ErrorNote>{message.text}</ErrorNote>
           ) : (
-            <p className="text-sm text-accent">{message.text}</p>
+            <p className="text-sm text-primary">{message.text}</p>
           ))}
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           {settings.push.subscriptions === 0
             ? 'No device receives reminders yet.'
             : `${settings.push.subscriptions} device${settings.push.subscriptions === 1 ? '' : 's'} receive${
@@ -199,35 +205,22 @@ function Reminders({ profile }: { profile: ProfileDto }) {
       <Card className="space-y-4">
         <label className="flex items-center justify-between">
           <span className="text-sm">Send reminders</span>
-          <input
-            type="checkbox"
+          <Switch
             checked={state.remindersEnabled}
-            onChange={(e) => update({ remindersEnabled: e.target.checked })}
-            className="size-5 accent-[var(--accent)]"
+            onCheckedChange={(on) => update({ remindersEnabled: on })}
+            aria-label="Send reminders"
           />
         </label>
         <div>
           <p className="mb-2 text-sm">Weigh-in days</p>
-          <div className="flex gap-1" role="group" aria-label="Weigh-in days">
-            {WEEKDAYS.map((label, i) => {
-              const day = i + 1;
-              const on = state.weighInDays.includes(day);
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggleDay(day)}
-                  className={`min-h-10 flex-1 rounded-lg text-xs font-semibold transition ${
-                    on ? 'bg-accent text-bg' : 'bg-surface-2 text-muted hover:text-text'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-2 text-xs text-muted">
+          <MultiToggle
+            label="Weigh-in days"
+            fill
+            options={WEEKDAYS.map((label, i) => ({ value: i + 1, label }))}
+            value={state.weighInDays}
+            onToggle={toggleDay}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
             Two a week is the minimum for a trend you can act on within about six weeks.
           </p>
         </div>
@@ -241,7 +234,7 @@ function Reminders({ profile }: { profile: ProfileDto }) {
           value={state.checkinReminderTime}
           onChange={(v) => update({ checkinReminderTime: v })}
         />
-        <p className="text-xs text-muted">Times are in {state.timezone}.</p>
+        <p className="text-xs text-muted-foreground">Times are in {state.timezone}.</p>
         {error && <ErrorNote>{error}</ErrorNote>}
       </Card>
     </section>
@@ -260,11 +253,11 @@ function TimeRow({
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-sm">{label}</span>
-      <input
+      <Input
         type="time"
         value={value}
         onChange={(e) => e.target.value && onChange(e.target.value)}
-        className="rounded-xl border border-border bg-bg px-3 py-2 text-base outline-none focus:border-accent"
+        className="h-11 w-auto"
       />
     </label>
   );
@@ -287,7 +280,7 @@ function Shortcuts({ configured }: { configured: boolean }) {
             The Shortcut endpoints are off: set INGEST_TOKEN in the server's .env.
           </p>
         )}
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           Each Shortcut POSTs to one of these addresses with the header{' '}
           <code className="rounded bg-surface-2 px-1">
             Authorization: Bearer &lt;INGEST_TOKEN&gt;
@@ -302,7 +295,7 @@ function Shortcuts({ configured }: { configured: boolean }) {
             >
               <span className="min-w-0">
                 <span className="block text-sm font-medium">{e.label}</span>
-                <span className="block truncate text-xs text-muted">{e.url}</span>
+                <span className="block truncate text-xs text-muted-foreground">{e.url}</span>
               </span>
               <button
                 type="button"
@@ -313,10 +306,10 @@ function Shortcuts({ configured }: { configured: boolean }) {
                     setTimeout(() => setCopied(null), 1500);
                   })
                 }
-                className="rounded-full p-2 text-muted hover:bg-border"
+                className="rounded-full p-2 text-muted-foreground hover:bg-border"
               >
                 {copied === e.url ? (
-                  <span className="text-xs text-accent">Copied</span>
+                  <span className="text-xs text-primary">Copied</span>
                 ) : (
                   <Copy size={16} aria-hidden />
                 )}
@@ -330,10 +323,10 @@ function Shortcuts({ configured }: { configured: boolean }) {
 }
 
 function Row({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'bad' }) {
-  const color = tone === 'ok' ? 'text-accent' : tone === 'bad' ? 'text-danger' : 'text-text';
+  const color = tone === 'ok' ? 'text-primary' : tone === 'bad' ? 'text-danger' : 'text-text';
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <dt className="text-sm text-muted">{label}</dt>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className={`text-sm font-medium ${color}`}>{value}</dd>
     </div>
   );
@@ -363,7 +356,9 @@ function Server() {
           </>
         )}
       </dl>
-      {health.kind === 'error' && <p className="mt-2 text-sm text-muted">{health.message}</p>}
+      {health.kind === 'error' && (
+        <p className="mt-2 text-sm text-muted-foreground">{health.message}</p>
+      )}
     </section>
   );
 }

@@ -68,7 +68,7 @@ export function WeightChart({
             scale="time"
             domain={[sinceMs, nowMs]}
             tickFormatter={(t: number) => shortDate(new Date(t).toISOString())}
-            tick={{ fill: 'var(--muted)', fontSize: 11 }}
+            tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
             stroke="var(--border)"
             minTickGap={24}
           />
@@ -76,7 +76,7 @@ export function WeightChart({
             dataKey="weight"
             type="number"
             domain={[lo, hi]}
-            tick={{ fill: 'var(--muted)', fontSize: 11 }}
+            tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
             stroke="var(--border)"
             allowDecimals={false}
           />
@@ -94,7 +94,7 @@ export function WeightChart({
           <Line
             data={trendLine}
             dataKey="weight"
-            stroke="var(--accent)"
+            stroke="var(--primary)"
             strokeWidth={2}
             dot={false}
             isAnimationActive={false}
@@ -102,14 +102,14 @@ export function WeightChart({
           />
           <Scatter
             data={protocol}
-            fill="var(--accent)"
+            fill="var(--primary)"
             name="Morning weigh-in"
             isAnimationActive={false}
           />
           <Scatter
             data={offProtocol}
             fill="var(--surface)"
-            stroke="var(--accent)"
+            stroke="var(--primary)"
             name="Off-protocol weigh-in"
             isAnimationActive={false}
           />
@@ -150,14 +150,14 @@ export function MiniLine({
             scale="time"
             domain={['dataMin', 'dataMax']}
             tickFormatter={(t: number) => shortDate(new Date(t).toISOString())}
-            tick={{ fill: 'var(--muted)', fontSize: 11 }}
+            tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
             stroke="var(--border)"
             minTickGap={24}
           />
           <YAxis
             type="number"
             domain={[Math.floor(Math.min(...values) - pad), Math.ceil(Math.max(...values) + pad)]}
-            tick={{ fill: 'var(--muted)', fontSize: 11 }}
+            tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
             stroke="var(--border)"
             allowDecimals={false}
           />
@@ -174,9 +174,9 @@ export function MiniLine({
           />
           <Line
             dataKey="value"
-            stroke="var(--accent)"
+            stroke="var(--primary)"
             strokeWidth={2}
-            dot={{ r: 2.5, fill: 'var(--accent)' }}
+            dot={{ r: 2.5, fill: 'var(--primary)' }}
             isAnimationActive={false}
           />
         </ComposedChart>

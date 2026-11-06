@@ -2,9 +2,10 @@ import type { AiRunDto } from '@diet/shared';
 import { Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { Textarea } from '@/ui/textarea';
 import { api, ApiError } from '../api';
 import { useQuery } from '../useQuery';
-import { Button, Card, ErrorNote, SectionTitle } from './ui';
+import { Button, Card, ErrorNote, SectionTitle, Disclosure } from './ui';
 
 const POLL_MS = 3000;
 
@@ -50,7 +51,7 @@ export function GenerateCard() {
       {active ? (
         <div className="flex items-center gap-3" role="status">
           <span
-            className="size-4 animate-spin rounded-full border-2 border-accent border-t-transparent"
+            className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent"
             aria-hidden
           />
           <p className="text-sm">
@@ -60,19 +61,19 @@ export function GenerateCard() {
         </div>
       ) : (
         <>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             Claude builds a week from your pool and rules; code then checks every number and fixes
             small portion misses. You get a draft to review; nothing changes until you activate it.
           </p>
           <label className="block">
             <span className="text-sm">Anything for this week? (optional)</span>
-            <textarea
+            <Textarea
               value={preferences}
               onChange={(e) => setPreferences(e.target.value)}
               rows={2}
               maxLength={500}
               placeholder="e.g. more fish, no lentils, quick lunches on Tuesday"
-              className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-base"
+              className="mt-1 w-full"
             />
           </label>
           {error && <ErrorNote>{error}</ErrorNote>}
@@ -82,7 +83,9 @@ export function GenerateCard() {
         </>
       )}
       {runs.error && active && (
-        <p className="text-xs text-muted">Lost contact with the server; still checking…</p>
+        <p className="text-xs text-muted-foreground">
+          Lost contact with the server; still checking…
+        </p>
       )}
       {latest && !active && <RunResult run={latest} />}
     </Card>
@@ -93,31 +96,32 @@ function RunResult({ run }: { run: AiRunDto }) {
   const cost = `$${run.costUsd.toFixed(2)}`;
   if (run.status === 'succeeded' && run.planId) {
     return (
-      <div className="space-y-2 rounded-xl bg-accent-soft p-3">
+      <div className="space-y-2 rounded-xl bg-primary-soft p-3">
         <p className="text-sm font-semibold">New draft ready</p>
         {run.result?.summary && <p className="text-sm">{run.result.summary}</p>}
         {run.result && run.result.solverChanges.length > 0 && (
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted">
-              {run.result.solverChanges.length} portion(s) adjusted to hit the targets
-            </summary>
+          <Disclosure
+            className="text-sm"
+            summaryClassName="text-muted-foreground"
+            summary={<>{run.result.solverChanges.length} portion(s) adjusted to hit the targets</>}
+          >
             <ul className="mt-1 list-disc pl-5 text-xs">
               {run.result.solverChanges.map((c) => (
                 <li key={c}>{c}</li>
               ))}
             </ul>
-          </details>
+          </Disclosure>
         )}
         {run.result && run.result.warnings.length > 0 && (
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             {run.result.warnings.length} note(s), e.g. {run.result.warnings[0]}
           </p>
         )}
         <div className="flex items-center justify-between">
-          <Link to={`/plan/edit/${run.planId}`} className="text-sm font-semibold text-accent">
+          <Link to={`/plan/edit/${run.planId}`} className="text-sm font-semibold text-primary">
             Review the draft
           </Link>
-          <span className="text-xs text-muted">
+          <span className="text-xs text-muted-foreground">
             {run.result?.repaired ? 'needed one repair · ' : ''}
             {cost}
           </span>
@@ -133,16 +137,21 @@ function RunResult({ run }: { run: AiRunDto }) {
         </p>
         {run.error && <p className="text-sm">{run.error}</p>}
         {run.result && run.result.errors.length > 0 && (
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted">What still failed</summary>
+          <Disclosure
+            className="text-sm"
+            summaryClassName="text-muted-foreground"
+            summary="What still failed"
+          >
             <ul className="mt-1 list-disc pl-5 text-xs">
               {run.result.errors.slice(0, 15).map((e) => (
                 <li key={e}>{e}</li>
               ))}
             </ul>
-          </details>
+          </Disclosure>
         )}
-        <p className="text-xs text-muted">{cost}. Try again, or adjust the rules or pool.</p>
+        <p className="text-xs text-muted-foreground">
+          {cost}. Try again, or adjust the rules or pool.
+        </p>
       </div>
     );
   }

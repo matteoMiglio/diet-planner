@@ -102,6 +102,8 @@ describe('Scan', () => {
     expect(await screen.findByRole('heading', { name: 'Nutella' })).toBeInTheDocument();
     expect(screen.getByText('Fit for you now')).toBeInTheDocument();
     // Open Food Facts had no grade: computed Nutri-Score E, NOVA 4, one additive.
+    // Open both cards' breakdowns (quality and fit).
+    for (const b of screen.getAllByRole('button', { name: "How it's scored" })) fireEvent.click(b);
     expect(screen.getByText(/Computed Nutri-Score: E/)).toBeInTheDocument();
     expect(screen.getByText('Avoid')).toBeInTheDocument();
     // Defaults to one serving (15 g).

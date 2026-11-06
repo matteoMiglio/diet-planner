@@ -9,6 +9,7 @@ import { add, optionMacros, SLOT_LABEL, ZERO } from '@diet/shared';
 import { ChevronRight, ClipboardCheck, Utensils, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { Input } from '@/ui/input';
 import { api, ApiError } from '../api';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -47,18 +48,20 @@ function CheckinBanner({ started }: { started: boolean }) {
   return (
     <Link
       to="/checkin"
-      className="flex items-center gap-3 rounded-2xl bg-accent-soft p-4 text-text transition hover:opacity-90"
+      className="flex items-center gap-3 rounded-2xl bg-primary-soft p-4 text-text transition hover:opacity-90"
     >
-      <span className="rounded-full bg-surface p-2 text-accent">
+      <span className="rounded-full bg-surface p-2 text-primary">
         <ClipboardCheck size={20} aria-hidden />
       </span>
       <span className="flex-1">
         <span className="block font-semibold">
           {started ? 'Finish the weekly check-in' : 'Weekly check-in due'}
         </span>
-        <span className="block text-sm text-muted">Weight, waist, and four quick answers.</span>
+        <span className="block text-sm text-muted-foreground">
+          Weight, waist, and four quick answers.
+        </span>
       </span>
-      <ChevronRight size={20} className="text-muted" aria-hidden />
+      <ChevronRight size={20} className="text-muted-foreground" aria-hidden />
     </Link>
   );
 }
@@ -102,17 +105,17 @@ function WeightCard({
           {latest ? (
             <>
               <p className="text-2xl font-bold tracking-tight">{kg(latest.weightKg, 2)}</p>
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 {shortDate(latest.measuredAt)}, {clockTime(latest.measuredAt)}
               </p>
             </>
           ) : (
-            <p className="text-sm text-muted">No weigh-ins yet.</p>
+            <p className="text-sm text-muted-foreground">No weigh-ins yet.</p>
           )}
         </div>
         {trend && (
           <Link to="/progress" className="text-right">
-            <span className="block text-xs text-muted">Trend</span>
+            <span className="block text-xs text-muted-foreground">Trend</span>
             <span className="block text-sm font-semibold">
               {trend.decidable && trend.slopeKgPerWeek !== null
                 ? kgPerWeek(trend.slopeKgPerWeek)
@@ -134,7 +137,7 @@ function WeightCard({
         <label className="sr-only" htmlFor="quick-weight">
           Weight in kg
         </label>
-        <input
+        <Input
           id="quick-weight"
           type="text"
           inputMode="decimal"
@@ -142,7 +145,7 @@ function WeightCard({
           placeholder="Weight in kg"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="min-h-11 flex-1 rounded-xl border border-border bg-bg px-3 text-base outline-none focus:border-accent"
+          className="flex-1 h-11"
         />
         <Button type="submit" disabled={saving || value.trim() === ''}>
           {saving ? 'Saving…' : 'Log'}
@@ -172,7 +175,7 @@ function TodayMeals() {
         {plan
           ? 'Today has no meals in the plan. '
           : 'Your meals for the day show up here once a plan is active. '}
-        <Link to="/plan" className="font-semibold text-accent">
+        <Link to="/plan" className="font-semibold text-primary">
           Go to Plan
         </Link>
       </EmptyState>
@@ -188,13 +191,16 @@ function TodayMeals() {
   return (
     <section aria-labelledby="meals-heading" className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h2 id="meals-heading" className="text-xs font-semibold tracking-wide text-muted uppercase">
+        <h2
+          id="meals-heading"
+          className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+        >
           {dayType === 'training' ? 'Training day' : 'Rest day'}
         </h2>
         <span className="text-sm">
           <span className="font-semibold">{Math.round(totals.kcal)}</span>
-          {targets && <span className="text-muted"> / {targets.kcal} kcal</span>}
-          <span className="text-muted">
+          {targets && <span className="text-muted-foreground"> / {targets.kcal} kcal</span>}
+          <span className="text-muted-foreground">
             {' '}
             · P {Math.round(totals.proteinG)}
             {targets && `/${targets.proteinG}`}
@@ -209,7 +215,7 @@ function TodayMeals() {
           <Card key={meal.slot} className="space-y-2">
             <div className="flex items-baseline justify-between">
               <h3 className="font-semibold">{SLOT_LABEL[meal.slot]}</h3>
-              <span className="text-xs text-muted">
+              <span className="text-xs text-muted-foreground">
                 {Math.round(m.kcal)} kcal · P {Math.round(m.proteinG)}
               </span>
             </div>
@@ -227,7 +233,7 @@ function TodayMeals() {
                     aria-checked={i === index}
                     onClick={() => setPicked({ ...picked, [meal.slot]: i })}
                     className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                      i === index ? 'bg-accent text-bg' : 'bg-surface-2 text-muted'
+                      i === index ? 'bg-primary text-bg' : 'bg-surface-2 text-muted-foreground'
                     }`}
                   >
                     {o.label}
@@ -239,7 +245,7 @@ function TodayMeals() {
               {option.items.map((item, i) => (
                 <li key={i} className="flex justify-between gap-3">
                   <span>{item.snapshot?.name}</span>
-                  <span className="shrink-0 text-muted">
+                  <span className="shrink-0 text-muted-foreground">
                     {item.display
                       ? `${item.display.qty} ${item.display.unit}`
                       : `${Math.round(item.grams)} g`}
@@ -247,7 +253,7 @@ function TodayMeals() {
                 </li>
               ))}
             </ul>
-            {meal.notes && <p className="text-xs text-muted">{meal.notes}</p>}
+            {meal.notes && <p className="text-xs text-muted-foreground">{meal.notes}</p>}
           </Card>
         );
       })}
@@ -275,7 +281,7 @@ function ExtrasCard() {
     <Card className="space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionTitle>Also eaten</SectionTitle>
-        <span className="text-sm text-muted">
+        <span className="text-sm text-muted-foreground">
           {log.data.totals.kcal} kcal · P {log.data.totals.proteinG}
         </span>
       </div>
@@ -284,7 +290,7 @@ function ExtrasCard() {
           <li key={e.id} className="flex items-center justify-between gap-3 py-2 text-sm">
             <span className="min-w-0">
               <span className="block truncate">{e.name}</span>
-              <span className="block text-xs text-muted">
+              <span className="block text-xs text-muted-foreground">
                 {Math.round(e.grams)} g · {Math.round(e.kcal)} kcal · P {Math.round(e.proteinG)}
               </span>
             </span>
@@ -292,7 +298,7 @@ function ExtrasCard() {
               type="button"
               onClick={() => void remove(e.id)}
               aria-label={`Remove ${e.name}`}
-              className="rounded-full p-1.5 text-muted hover:bg-surface-2"
+              className="rounded-full p-1.5 text-muted-foreground hover:bg-surface-2"
             >
               <X size={16} aria-hidden />
             </button>

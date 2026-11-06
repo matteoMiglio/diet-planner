@@ -1,10 +1,25 @@
-import type { FoodDto, FoodInput, PoolInfo, Role, Slot } from '@diet/shared';
+import type { FoodDto, FoodInput, PoolInfo, Slot } from '@diet/shared';
 import { PRIORITIES, ROLE_LABEL, ROLES, SLOT_LABEL, SLOTS } from '@diet/shared';
 import { Plus, Search, X } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { Input } from '@/ui/input';
 import { api, ApiError } from '../api';
+import { Switch } from '@/ui/switch';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card, ErrorNote, NumberField, parseDecimal, Segmented } from '../components/ui';
+import { Badge } from '@/ui/badge';
+import { BottomSheet } from '../components/BottomSheet';
+import {
+  Button,
+  Card,
+  ErrorNote,
+  NumberField,
+  parseDecimal,
+  Segmented,
+  OptionSelect,
+  Disclosure,
+  MultiToggle,
+} from '../components/ui';
 import { useQuery } from '../useQuery';
 
 export function FoodsScreen() {
@@ -29,29 +44,34 @@ export function FoodsScreen() {
         </Button>
       </div>
 
-      <label className="mb-4 flex items-center gap-2 rounded-xl border border-border bg-surface px-3">
-        <Search size={16} className="text-muted" aria-hidden />
-        <span className="sr-only">Search foods</span>
-        <input
+      <div className="relative mb-4">
+        <Search
+          size={16}
+          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          aria-label="Search foods"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search"
-          className="min-h-11 flex-1 bg-transparent text-base outline-none"
+          className="h-11 pl-9"
         />
-      </label>
+      </div>
 
       {foods.status === 'error' && <ErrorNote>{foods.error.message}</ErrorNote>}
       {foods.data && foods.data.length === 0 && (
-        <p className="text-sm text-muted">No foods yet. Add the ones your plan uses.</p>
+        <p className="text-sm text-muted-foreground">No foods yet. Add the ones your plan uses.</p>
       )}
       <FoodList foods={active} onPick={setEditing} />
       {archived.length > 0 && (
-        <details className="mt-4">
-          <summary className="cursor-pointer text-sm text-muted">
-            Archived ({archived.length})
-          </summary>
+        <Disclosure
+          className="mt-4"
+          summaryClassName="text-sm text-muted-foreground"
+          summary={<>Archived ({archived.length})</>}
+        >
           <FoodList foods={archived} onPick={setEditing} />
-        </details>
+        </Disclosure>
       )}
 
       {editing && (
@@ -81,17 +101,16 @@ function FoodList({ foods, onPick }: { foods: FoodDto[]; onPick: (f: FoodDto) =>
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-2"
             >
               <span className="min-w-0">
-                <span className="flex items-center gap-1.5 truncate text-sm font-medium">
-                  {f.name}
-                  {f.pool.inPool && (
-                    <span className="rounded bg-accent-soft px-1.5 text-[10px] font-semibold text-accent uppercase">
-                      pool
-                    </span>
-                  )}
+                {/* A long name truncates; the badge always stays visible. */}
+                <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                  <span className="truncate">{f.name}</span>
+                  {f.pool.inPool && <Badge variant="outline">pool</Badge>}
                 </span>
-                {f.brand && <span className="block truncate text-xs text-muted">{f.brand}</span>}
+                {f.brand && (
+                  <span className="block truncate text-xs text-muted-foreground">{f.brand}</span>
+                )}
               </span>
-              <span className="shrink-0 text-right text-xs text-muted">
+              <span className="shrink-0 text-right text-xs text-muted-foreground">
                 <span className="block font-medium text-text">{Math.round(f.kcal)} kcal</span>P{' '}
                 {f.proteinG} · C {f.carbsG} · F {f.fatG}
               </span>
@@ -180,6 +199,7 @@ function FoodSheet({
     try {
       if (food) await api.patch(`/foods/${food.id}`, body);
       else await api.post('/foods', body);
+      toast.success(food ? 'Food saved' : 'Food added');
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
@@ -188,68 +208,44 @@ function FoodSheet({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-20 flex items-end justify-center bg-black/40"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="food-title"
-    >
+    <BottomSheet title={food ? 'Edit food' : 'New food'} onClose={onClose}>
       <form
-        className="max-h-[90vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-3xl bg-surface p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]"
+        className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <div className="flex items-center justify-between">
-          <h2 id="food-title" className="text-lg font-bold">
-            {food ? 'Edit food' : 'New food'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-2 text-muted hover:bg-surface-2"
-          >
-            <X size={20} aria-hidden />
-          </button>
-        </div>
         <TextRow label="Name" value={name} onChange={setName} />
         <TextRow label="Brand" value={brand} onChange={setBrand} />
-        <p className="pt-2 text-xs font-semibold tracking-wide text-muted uppercase">Per 100 g</p>
+        <p className="pt-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Per 100 g
+        </p>
         <NumberField label="Energy" unit="kcal" value={kcal} onChange={setKcal} />
         <NumberField label="Protein" unit="g" value={protein} onChange={setProtein} />
         <NumberField label="Carbs" unit="g" value={carbs} onChange={setCarbs} />
         <NumberField label="Fat" unit="g" value={fat} onChange={setFat} />
         <NumberField label="Fibre" unit="g" value={fibre} onChange={setFibre} />
-        <label className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <span className="text-sm">Values refer to</span>
-          <select
-            value={basis}
-            onChange={(e) => setBasis(e.target.value as FoodDto['basis'])}
-            className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
-          >
-            {BASES.map((b) => (
-              <option key={b.value} value={b.value}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <OptionSelect label="Values refer to" value={basis} options={BASES} onChange={setBasis} />
+        </div>
 
-        <p className="pt-2 text-xs font-semibold tracking-wide text-muted uppercase">Portions</p>
+        <p className="pt-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Portions
+        </p>
         {units.map((u, i) => (
           <div key={i} className="flex items-center gap-2">
-            <input
+            <Input
               aria-label="Portion name"
               placeholder="cup, slice, pcs…"
               value={u.unit}
               onChange={(e) =>
                 setUnits(units.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))
               }
-              className="min-h-10 flex-1 rounded-xl border border-border bg-bg px-3 text-base"
+              className="flex-1 h-11"
             />
-            <input
+            <Input
               aria-label="Grams per portion"
               inputMode="decimal"
               placeholder="g"
@@ -257,14 +253,14 @@ function FoodSheet({
               onChange={(e) =>
                 setUnits(units.map((x, j) => (j === i ? { ...x, grams: e.target.value } : x)))
               }
-              className="min-h-10 w-20 rounded-xl border border-border bg-bg px-3 text-right text-base"
+              className="w-20 text-right h-11"
             />
-            <span className="text-sm text-muted">g</span>
+            <span className="text-sm text-muted-foreground">g</span>
             <button
               type="button"
               aria-label="Remove portion"
               onClick={() => setUnits(units.filter((_, j) => j !== i))}
-              className="rounded-full p-2 text-muted hover:bg-surface-2"
+              className="rounded-full p-2 text-muted-foreground hover:bg-surface-2"
             >
               <X size={16} aria-hidden />
             </button>
@@ -292,7 +288,7 @@ function FoodSheet({
           )}
         </div>
       </form>
-    </div>
+    </BottomSheet>
   );
 }
 
@@ -308,11 +304,7 @@ function TextRow({
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-sm">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-h-10 w-56 rounded-xl border border-border bg-bg px-3 text-base outline-none focus:border-accent"
-      />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} className="w-56 h-11" />
     </label>
   );
 }
@@ -331,35 +323,30 @@ function PoolFields({
     <div className="space-y-3 pt-2">
       <label className="flex items-center justify-between">
         <span>
-          <span className="block text-xs font-semibold tracking-wide text-muted uppercase">
+          <span className="block text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Planning pool
           </span>
-          <span className="block text-xs text-muted">Foods the plan generator may use.</span>
+          <span className="block text-xs text-muted-foreground">
+            Foods the plan generator may use.
+          </span>
         </span>
-        <input
-          type="checkbox"
+        <Switch
           checked={pool.inPool}
-          onChange={(e) => set({ inPool: e.target.checked })}
-          className="size-5 accent-[var(--accent)]"
+          onCheckedChange={(inPool) => set({ inPool })}
           aria-label="In the planning pool"
         />
       </label>
       {pool.inPool && (
         <>
-          <label className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-sm">Role</span>
-            <select
+            <OptionSelect
+              label="Role"
               value={pool.role}
-              onChange={(e) => set({ role: e.target.value as Role })}
-              className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL[r]}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+              onChange={(role) => set({ role })}
+            />
+          </div>
           <div>
             <p className="mb-1 text-sm">Priority</p>
             <Segmented
@@ -374,30 +361,18 @@ function PoolFields({
           </div>
           <div>
             <p className="mb-1 text-sm">Preferred meals</p>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Preferred meals">
-              {SLOTS.map((slot: Slot) => {
-                const on = pool.preferredSlots.includes(slot);
-                return (
-                  <button
-                    key={slot}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() =>
-                      set({
-                        preferredSlots: on
-                          ? pool.preferredSlots.filter((x) => x !== slot)
-                          : [...pool.preferredSlots, slot],
-                      })
-                    }
-                    className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-                      on ? 'bg-accent text-bg' : 'bg-surface-2 text-muted'
-                    }`}
-                  >
-                    {SLOT_LABEL[slot]}
-                  </button>
-                );
-              })}
-            </div>
+            <MultiToggle
+              label="Preferred meals"
+              options={SLOTS.map((slot) => ({ value: slot, label: SLOT_LABEL[slot] }))}
+              value={pool.preferredSlots}
+              onToggle={(slot: Slot) =>
+                set({
+                  preferredSlots: pool.preferredSlots.includes(slot)
+                    ? pool.preferredSlots.filter((x) => x !== slot)
+                    : [...pool.preferredSlots, slot],
+                })
+              }
+            />
           </div>
           <div className="space-y-2">
             <p className="text-sm">Portions in a plan</p>
@@ -433,20 +408,15 @@ function PoolFields({
                 Add a portion above (e.g. cup = 150 g) to plan in whole units.
               </p>
             ) : (
-              <label className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-sm">Unit</span>
-                <select
+                <OptionSelect
+                  label="Unit"
                   value={pool.portion.unit}
-                  onChange={(e) => set({ portion: { kind: 'fixed_unit', unit: e.target.value } })}
-                  className="rounded-xl border border-border bg-bg px-3 py-2 text-base"
-                >
-                  {units.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  options={units.map((u) => ({ value: u, label: u }))}
+                  onChange={(unit) => set({ portion: { kind: 'fixed_unit', unit } })}
+                />
+              </div>
             )}
           </div>
         </>

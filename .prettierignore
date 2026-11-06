@@ -2,3 +2,5 @@ pnpm-lock.yaml
 apps/api/drizzle/meta/
 dist/
 coverage/
+# shadcn/ui components, kept exactly as the shadcn CLI generates them.
+apps/web/src/ui/
